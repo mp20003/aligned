@@ -117,7 +117,7 @@ export default function Today() {
   }
 
   return (
-    <div className="min-h-screen bg-beige max-w-md mx-auto px-6 pt-12 pb-16 flex flex-col gap-10">
+    <div className="min-h-screen bg-beige max-w-md mx-auto px-6 pt-12 pb-28 flex flex-col gap-10">
       {/* Reflective prompt */}
       <div className="flex flex-col gap-1 pt-4">
         <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Today</p>
