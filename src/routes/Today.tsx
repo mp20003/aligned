@@ -113,7 +113,7 @@ export default function Today() {
   }
 
   if (aligned) {
-    return <AlignedState date={date} categories={categories} todayEntry={todayEntry} onReview={() => setAligned(false)} />
+    return <AlignedState date={date} categories={categories} todayEntry={todayEntry} />
   }
 
   return (
@@ -226,10 +226,9 @@ type AlignedStateProps = {
   date: string
   categories: Record<CategoryKey, { label: string; definition: string }>
   todayEntry: { physical: { text: string } | null; mental: { text: string } | null; spiritual: { text: string } | null }
-  onReview: () => void
 }
 
-function AlignedState({ date, categories, todayEntry, onReview }: AlignedStateProps) {
+function AlignedState({ date, categories, todayEntry }: AlignedStateProps) {
   const [day, month, year] = [
     new Date(date + 'T12:00:00').getDate(),
     new Date(date + 'T12:00:00').toLocaleString('default', { month: 'long' }),
