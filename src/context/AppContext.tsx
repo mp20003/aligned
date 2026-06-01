@@ -32,7 +32,7 @@ function save(data: AppData) {
 type AppContextValue = {
   data: AppData
   completeOnboarding: (onboarding: OnboardingData) => void
-  logWin: (date: string, category: 'physical' | 'mental' | 'spiritual', text: string) => void
+  logWin: (date: string, category: 'physical' | 'mental' | 'spiritual', text: string, reflection?: string) => void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -49,13 +49,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     update({ ...data, onboarding })
   }, [data, update])
 
-  const logWin = useCallback((date: string, category: 'physical' | 'mental' | 'spiritual', text: string) => {
+  const logWin = useCallback((date: string, category: 'physical' | 'mental' | 'spiritual', text: string, reflection?: string) => {
     const day = data.days[date] ?? { physical: null, mental: null, spiritual: null }
     update({
       ...data,
       days: {
         ...data.days,
-        [date]: { ...day, [category]: { text, completedAt: new Date().toISOString() } },
+        [date]: { ...day, [category]: { text, completedAt: new Date().toISOString(), reflection } },
       },
     })
   }, [data, update])

@@ -3,6 +3,7 @@ export type CategoryKey = 'physical' | 'mental' | 'spiritual'
 export type WinEntry = {
   text: string
   completedAt: string // ISO timestamp
+  reflection?: string
 }
 
 export type DayEntry = {
