@@ -25,12 +25,12 @@ const LINKS = [
   },
   {
     to: '/score',
-    label: 'Score',
+    label: 'Pulse',
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2 : 1.5} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z" />
-        <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
-        <path d="M12 6v2M12 16v2M6 12H4M20 12h-2" />
+        <circle cx="12" cy="12" r="9" />
+        <circle cx="12" cy="12" r="5" />
+        <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
       </svg>
     ),
   },
