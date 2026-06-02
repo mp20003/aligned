@@ -1,4 +1,92 @@
-# Three Wins — Product & Engineering Reference
+# Aligned — Product & Engineering Reference
+
+---
+
+## Current Build State (handoff note — updated at context limit)
+
+### App name
+**Aligned** — confirmed. GitHub repo: `https://github.com/mp20003/aligned`
+
+### What is built and deployed (Vercel)
+All four screens are complete and live:
+
+| Screen | File | Status |
+|---|---|---|
+| Onboarding | `src/routes/Onboarding.tsx` | ✅ Complete |
+| Today | `src/routes/Today.tsx` | ✅ Complete |
+| History | `src/routes/History.tsx` | ✅ Complete |
+| Pulse | `src/routes/Score.tsx` | ✅ Complete |
+
+### Key decisions made (not in original brief)
+- **App name:** Aligned
+- **"Score" screen renamed to "Pulse"** — Pulse is also the name of the app's guiding entity
+- **Pulse entity** — a non-human presence that guides the user. Introduced on the onboarding intro screen. Signs the weekly letter. Attribution shown on Today prompts ("— Pulse"). Not a character, not an AI — a presence.
+- **Node.js path** — installed at `C:\Program Files\nodejs`. The `.claude/launch.json` uses the full path: `C:\\Program Files\\nodejs\\node.exe`
+- **Routing:** React Router v7 (user confirmed)
+- **Fonts:** Lora (serif) + Inter (sans-serif) via Google Fonts
+
+### State shape (actual, as built)
+```ts
+type AppData = {
+  onboarding: {
+    completed: boolean
+    name: string                          // user's name, asked on intro screen
+    categories: Record<CategoryKey, { label: string; definition: string }>
+  }
+  days: Record<string, DayEntry>          // key: "YYYY-MM-DD"
+}
+
+type DayEntry = {
+  physical:  WinEntry | null
+  mental:    WinEntry | null
+  spiritual: WinEntry | null
+}
+
+type WinEntry = {
+  text: string
+  completedAt: string    // ISO timestamp
+  reflection?: string    // one word: Hard / Easy / Meaningful / Routine
+}
+```
+
+### Today screen behaviour
+- Reflective prompt built from user's category labels (e.g. "Where is your physical practice calling you today?"), attributed "— Pulse"
+- Win cards show: daily-rotating suggestion chips (3 per category, curated list in Today.tsx), previous wins from history as chips, free text input
+- After tapping Done: one-word reflection prompt (Hard / Easy / Meaningful / Routine)
+- After all 3 wins: soft pulse animation → aligned state with stacked colour-bar cards
+- Aligned state has "Edit today's wins" link to go back
+
+### Pulse screen behaviour
+- Three concentric SVG rings (Physical=outer, Mental=middle, Spiritual=inner)
+- Each ring fills based on days logged / 7 for current week
+- Rings breathe (expand/contract) at staggered rates — keyframe in `src/index.css`
+- Static background track ring always visible so progress is clear
+- 7-day dot grid per category below rings
+- Weekly letter: personal, opens "Dear [name]," generated from pattern logic, signed "With you, Pulse"
+
+### History screen behaviour
+- 30-day grid, date numbers inside each cell circle
+- Balanced = conic gradient (all three colours), Partial = muted, Missed = very light
+- One insight sentence from pattern analysis
+- No streaks, no percentages
+
+### Onboarding screen behaviour
+- Intro screen: Pulse introduction, breathing orb, "What should Pulse call you?" name field, Begin button
+- 3 category steps: explanation, tappable example chips, definition textarea
+- Spiritual step has label picker (Spiritual/Soulful/Intentional/Creative/custom)
+- Navigates to Today on completion, never shown again
+
+### Dev environment
+- `npm run dev` starts Vite on port 5173
+- `C:\Program Files\nodejs\node.exe` must be in PATH or used directly
+- `.claude/launch.json` configured for preview tool
+
+### Pending / next session ideas
+- The `"You said: ..."` hint below the input on win cards may be redundant since definition is already the placeholder — consider removing
+- Could add a name setting (allow user to change their name after onboarding)
+- Claude API integration was mentioned in the brief as a future feature — not yet wired
+
+---
 
 ## What This App Is
 
