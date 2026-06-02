@@ -13,15 +13,8 @@
  * Props: none. Reads from AppContext.
  */
 
-import { useRef, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
 import type { CategoryKey } from '../types'
-
-const COLORS: Record<CategoryKey, string> = {
-  physical:  '#1D9E75',
-  mental:    '#7F77DD',
-  spiritual: '#D85A30',
-}
 
 const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
 const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
@@ -32,11 +25,10 @@ const SVG_H = 246
 // All rows use the same peak height — differentiated by opacity/weight only.
 // This means a 3-win day looks identical regardless of which week it's in.
 // Baselines are evenly spaced with 46px between them.
-const W_BASELINE   = [52,  98, 144, 190, 236]
-const W_MAX_H      = [32,  32,  32,  32,  32]
-const W_STROKE     = [0.7, 0.9, 1.1, 1.5, 2.0]
-const W_OPACITY    = [0.10, 0.20, 0.35, 0.58, 1.0]
-const W_FILL_ALPHA = [0.015, 0.03, 0.045, 0.07, 0.11]
+const W_BASELINE = [52,  98, 144, 190, 236]
+const W_MAX_H    = [32,  32,  32,  32,  32]
+const W_STROKE   = [0.7, 0.9, 1.1, 1.5, 2.0]
+const W_OPACITY  = [0.10, 0.20, 0.35, 0.58, 1.0]
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -111,7 +103,7 @@ function getWeekStats(
 function generateLetter(
   stats: WeekStats,
   labels: Record<CategoryKey, { label: string; definition: string }>,
-  weekDays: Date[],
+  _weekDays: Date[],
   name: string
 ): string {
   const { logged, reflections, aligned, elapsed } = stats
@@ -243,10 +235,6 @@ function buildPath(
 }
 
 function PulseWaveSVG({ weeks, dayData }: { weeks: Date[][]; dayData: DayData }) {
-  // useRef/useEffect kept for potential future use — animation is now SVG-native
-  const _ref = useRef<SVGPathElement>(null)
-  useEffect(() => {}, [])
-
   const SWEEP_DUR = '5s'
 
   return (

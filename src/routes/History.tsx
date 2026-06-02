@@ -47,62 +47,6 @@ function getDayState(
   return 'missed'
 }
 
-function generateInsight(
-  days30: Date[],
-  dayData: Record<string, { physical: unknown; mental: unknown; spiritual: unknown }>,
-  labels: Record<CategoryKey, { label: string; definition: string }>
-): string {
-  const total = days30.length
-  const counts: Record<CategoryKey, number> = { physical: 0, mental: 0, spiritual: 0 }
-  let balanced = 0
-  let missed = 0
-
-  for (const d of days30) {
-    const entry = dayData[dateKey(d)]
-    if (!entry) { missed++; continue }
-    const done = CATEGORIES.filter(k => entry[k] !== null).length
-    if (done === 3) balanced++
-    else if (done === 0) missed++
-    CATEGORIES.forEach(k => { if (entry[k] !== null) counts[k]++ })
-  }
-
-  const weakest = CATEGORIES.reduce((a, b) => counts[a] <= counts[b] ? a : b)
-  const weakestLabel = labels[weakest].label.toLowerCase()
-
-  if (balanced === 0 && missed === total) return 'No wins logged yet. Today is a good day to start.'
-  if (balanced === total) return 'You were fully aligned every day this month. Rare.'
-
-  const weekends = days30.filter(d => d.getDay() === 0 || d.getDay() === 6)
-  const weekendMisses = weekends.filter(d => {
-    const e = dayData[dateKey(d)]
-    return !e || e[weakest] === null
-  }).length
-
-  if (weekends.length > 0 && weekendMisses / weekends.length >= 0.6 && counts[weakest] < total * 0.5) {
-    return `You tend to skip ${weakestLabel} on weekends — is that intentional?`
-  }
-
-  const weekdays = days30.filter(d => d.getDay() !== 0 && d.getDay() !== 6)
-  const weekdayMisses = weekdays.filter(d => {
-    const e = dayData[dateKey(d)]
-    return !e || e[weakest] === null
-  }).length
-
-  if (weekdays.length > 0 && weekdayMisses / weekdays.length >= 0.6 && counts[weakest] < total * 0.5) {
-    const label = weakestLabel.charAt(0).toUpperCase() + weakestLabel.slice(1)
-    return `${label} tends to slip on weekdays — your busiest days.`
-  }
-
-  if (counts[weakest] < total * 0.4) {
-    const label = weakestLabel.charAt(0).toUpperCase() + weakestLabel.slice(1)
-    return `${label} is your least consistent category this month.`
-  }
-
-  if (missed > total * 0.5) return 'More missed days than not this month. What got in the way?'
-
-  return `${balanced} fully aligned ${balanced === 1 ? 'day' : 'days'} in the last 30.`
-}
-
 export default function History() {
   const { data } = useApp()
   const days30 = getLast30Days()
