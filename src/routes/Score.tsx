@@ -1,19 +1,19 @@
 /**
- * Pulse
+ * Pulse — Wave
  *
- * Weekly alignment view. Three concentric rings fill based on how many days
- * each category was logged this week (Mon–Sun). Below the rings, a 7-day dot
- * row shows per-day completion per category. A personal weekly letter is
- * generated from the data — warm, observational, never judgmental.
+ * Your practice rendered as a pulse signal. Each day creates a peak on the
+ * waveform — tall for full alignment, smaller for partial, flat for missed.
+ * The current week's trace sits at the front, vivid and full-sized. Past
+ * weeks recede behind it as quieter, smaller traces.
  *
- * Ring fill = days logged ÷ 7. Consistency only — quality is acknowledged
- * in the letter via reflection words, not in the ring fill.
+ * Below the wave: the personal weekly letter from Pulse.
  *
- * Never shows streaks. Never uses the word "score".
+ * Never shows streaks, scores, or percentages.
  *
  * Props: none. Reads from AppContext.
  */
 
+import { useRef, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
 import type { CategoryKey } from '../types'
 
@@ -23,13 +23,20 @@ const COLORS: Record<CategoryKey, string> = {
   spiritual: '#D85A30',
 }
 
-const ACCENT_TEXT: Record<CategoryKey, string> = {
-  physical:  'text-physical',
-  mental:    'text-mental',
-  spiritual: 'text-spiritual',
-}
-
 const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
+const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+
+const SVG_W = 320
+const SVG_H = 246
+
+// All rows use the same peak height — differentiated by opacity/weight only.
+// This means a 3-win day looks identical regardless of which week it's in.
+// Baselines are evenly spaced with 46px between them.
+const W_BASELINE   = [52,  98, 144, 190, 236]
+const W_MAX_H      = [32,  32,  32,  32,  32]
+const W_STROKE     = [0.7, 0.9, 1.1, 1.5, 2.0]
+const W_OPACITY    = [0.10, 0.20, 0.35, 0.58, 1.0]
+const W_FILL_ALPHA = [0.015, 0.03, 0.045, 0.07, 0.11]
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -37,22 +44,27 @@ function dateKey(d: Date) {
   return d.toISOString().split('T')[0]
 }
 
-function getWeekDays(): Date[] {
-  const today = new Date()
-  const dow = (today.getDay() + 6) % 7 // 0=Mon
-  const monday = new Date(today)
-  monday.setDate(today.getDate() - dow)
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    return d
-  })
-}
-
 function isFuture(d: Date): boolean {
   const today = new Date()
   today.setHours(23, 59, 59, 999)
   return d > today
+}
+
+function getLastNWeeks(n: number): Date[][] {
+  const today = new Date()
+  const dow = (today.getDay() + 6) % 7  // days since Monday
+
+  const weeks: Date[][] = []
+  for (let w = n - 1; w >= 0; w--) {
+    weeks.push(
+      Array.from({ length: 7 }, (_, d) => {
+        const date = new Date(today)
+        date.setDate(today.getDate() - dow - w * 7 + d)
+        return date
+      })
+    )
+  }
+  return weeks
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
@@ -74,7 +86,6 @@ function getWeekStats(
     aligned: 0,
     elapsed: 0,
   }
-
   for (const d of weekDays) {
     if (isFuture(d)) continue
     stats.elapsed++
@@ -92,7 +103,6 @@ function getWeekStats(
     }
     if (allDone) stats.aligned++
   }
-
   return stats
 }
 
@@ -105,229 +115,233 @@ function generateLetter(
   name: string
 ): string {
   const { logged, reflections, aligned, elapsed } = stats
-  const total = 7
-
-  const greeting = name ? `Dear ${name},` : `Dear you,`
+  const remaining = 7 - elapsed
+  const greeting = name ? `Dearest ${name},` : `Dearest you,`
 
   if (elapsed === 0) {
-    return `${greeting}\n\nThe week is just beginning. Three categories, seven days. Show up for one today and see how it feels.\n\nThe practice starts now.\n\nWith you,\nPulse`
+    return `${greeting}\n\nA new week. The same invitation — three parts of you, one day at a time.\n\nYou don't have to be perfect. You just have to begin.\n\nStill with you.\n\nPulse`
   }
 
   const strongest = CATEGORIES.reduce((a, b) => logged[a] >= logged[b] ? a : b)
-  const weakest = CATEGORIES.reduce((a, b) => logged[a] <= logged[b] ? a : b)
+  const weakest   = CATEGORIES.reduce((a, b) => logged[a] <= logged[b] ? a : b)
   const strongestLabel = labels[strongest].label.toLowerCase()
-  const weakestLabel = labels[weakest].label.toLowerCase()
-
+  const weakestLabel   = labels[weakest].label.toLowerCase()
   const allReflections = CATEGORIES.flatMap(k => reflections[k])
-  const hardDays = allReflections.filter(r => r === 'Hard').length
+  const hardDays       = allReflections.filter(r => r === 'Hard').length
   const meaningfulDays = allReflections.filter(r => r === 'Meaningful').length
 
-  const weekStart = weekDays[0].toLocaleDateString('default', { month: 'long', day: 'numeric' })
-  const weekEnd = weekDays[6].toLocaleDateString('default', { month: 'long', day: 'numeric' })
-
-  let body = ''
-
-  // Opening
   const lines: string[] = [greeting, ``]
 
-  // Week context
-  lines.push(`Week of ${weekStart} – ${weekEnd}.`)
-  lines.push(``)
-
-  // Alignment summary
-  if (aligned === elapsed && elapsed >= 3) {
-    lines.push(`You've been fully aligned every day so far this week — all three categories, every day. That's the practice working.`)
-  } else if (aligned >= Math.ceil(elapsed * 0.7)) {
-    lines.push(`Most of your days this week have been fully aligned. ${aligned} out of ${elapsed} days with all three categories touched.`)
+  // Opening — tone varies by alignment pattern
+  if (aligned === elapsed && elapsed >= 4) {
+    lines.push(`Every single day this week, you showed up for all three parts of yourself. That's rare. Most people never find that rhythm — you're living it.`)
+  } else if (aligned >= Math.ceil(elapsed * 0.7) && elapsed >= 3) {
+    lines.push(`You've been whole more often than not this week. That consistency is the whole point — not perfection, just presence, most days.`)
   } else if (elapsed >= 3 && aligned === 0) {
-    lines.push(`No fully aligned days yet this week. That's just where you are — the week isn't over.`)
+    lines.push(`This week has been fragmented — pieces here and there, nothing fully complete. That's real life. The week isn't over, and one whole day changes the feeling of all of them.`)
+  } else if (elapsed <= 2) {
+    lines.push(`You're early in the week. What you build from here is still entirely yours to shape.`)
   } else {
-    lines.push(`${aligned} fully aligned ${aligned === 1 ? 'day' : 'days'} so far this week. ${elapsed - aligned} days where something was left out.`)
+    lines.push(`Some days whole, some days not. That's the honest shape of a real week — and you kept logging it, which means you kept paying attention.`)
   }
 
   lines.push(``)
 
-  // Strongest category
-  if (logged[strongest] > 0) {
-    if (logged[strongest] === elapsed) {
-      lines.push(`Your ${strongestLabel} practice has been consistent every day you could have logged. Hold that.`)
-    } else {
-      lines.push(`${labels[strongest].label} has been your most consistent practice — ${logged[strongest]} out of ${elapsed} days.`)
-    }
+  // What's held strong
+  if (logged[strongest] === elapsed && elapsed >= 2) {
+    lines.push(`Your ${strongestLabel} practice hasn't wavered. Whatever else fell away this week, that held. That's something to trust in yourself.`)
+  } else if (logged[strongest] >= 3) {
+    lines.push(`Your ${strongestLabel} practice has been your anchor this week — showing up more consistently than anything else.`)
   }
 
-  // Weakest category (only if meaningfully different)
-  if (logged[weakest] < logged[strongest] && elapsed >= 2) {
-    if (logged[weakest] === 0) {
-      lines.push(`Your ${weakestLabel} practice hasn't shown up yet this week. Worth asking why.`)
-    } else {
-      lines.push(`${labels[weakest].label} has been quieter — ${logged[weakest]} of ${elapsed} days. Not a failure, just a pattern worth noticing.`)
-    }
+  // What's been quiet — only if meaningfully different and worth naming
+  if (logged[weakest] === 0 && elapsed >= 3) {
+    lines.push(`Your ${weakestLabel} has gone quiet. Not a failure — but worth sitting with. Sometimes what we avoid is what we most need.`)
+  } else if (logged[weakest] < logged[strongest] - 2 && elapsed >= 4) {
+    lines.push(`Your ${weakestLabel} has been harder to reach this week. Notice that without judgment — just notice.`)
   }
 
   lines.push(``)
 
-  // Reflection acknowledgement
-  if (hardDays >= 2) {
-    lines.push(`You've logged some hard days. That's not the practice failing — that's the practice being real.`)
-  } else if (meaningfulDays >= 2) {
-    lines.push(`Several days felt meaningful this week. That's what you're building this for.`)
+  // Reflection-based personal note
+  if (hardDays >= 3) {
+    lines.push(`You showed up on hard days. That's not something everyone does. The practice is easiest when life is easy — what you're building is something that holds when it isn't.`)
+  } else if (hardDays >= 1 && meaningfulDays >= 1) {
+    lines.push(`Hard days and meaningful ones — you've had both this week. That range is what a real practice looks like.`)
+  } else if (meaningfulDays >= 3) {
+    lines.push(`So many of your days this week felt meaningful. That's not an accident. That's what showing up for yourself actually does.`)
+  } else if (meaningfulDays >= 1) {
+    lines.push(`At least one day this week felt truly meaningful to you. Let that be the signal — not the exception.`)
   }
 
-  // Days remaining
-  const remaining = total - elapsed
-  if (remaining > 0 && remaining < 5) {
-    const projected = CATEGORIES.map(k => {
-      const couldFinish = logged[k] + remaining
-      return couldFinish >= 6 ? labels[k].label : null
-    }).filter(Boolean)
-
-    if (projected.length === 3) {
-      lines.push(`${remaining} days left. A strong finish is still within reach.`)
-    } else if (remaining === 1) {
-      lines.push(`One day left. Make it count.`)
-    }
-  }
-
-  if (remaining === 0) {
-    lines.push(`The week is complete. Whatever it looked like — it's yours.`)
+  // Looking ahead or closing
+  if (remaining > 0 && remaining <= 3) {
+    lines.push(`${remaining === 1 ? 'One day' : `${remaining} days`} left. The week closes however you choose to close it.`)
+  } else if (remaining === 0) {
+    lines.push(`The week is done. It belongs to you now — all of it.`)
   }
 
   lines.push(``)
-  lines.push(`Same time next week.`)
+  lines.push(`Still with you.`)
   lines.push(``)
-  lines.push(`With you,`)
   lines.push(`Pulse`)
 
-  body = lines.join('\n')
-  return body
+  return lines.join('\n')
 }
 
-// ── Ring SVG ──────────────────────────────────────────────────────────────────
+// ── Pulse wave SVG ────────────────────────────────────────────────────────────
 
-const RING_RADII: Record<CategoryKey, number> = {
-  physical:  80,
-  mental:    57,
-  spiritual: 34,
-}
-const STROKE_WIDTH = 11
-const CX = 100
-const CY = 100
+type DayData = Record<string, {
+  physical: { text: string } | null
+  mental: { text: string } | null
+  spiritual: { text: string } | null
+}>
 
-const RING_BREATHE: Record<CategoryKey, { duration: string; delay: string }> = {
-  physical:  { duration: '3s',   delay: '0s'    },
-  mental:    { duration: '3.8s', delay: '0.5s'  },
-  spiritual: { duration: '4.6s', delay: '1.1s'  },
+function winCount(entry: DayData[string] | undefined, future: boolean): number {
+  if (future || !entry) return future ? -1 : 0
+  return CATEGORIES.filter(k => entry[k] !== null).length
 }
 
-function RingSVG({ stats }: { stats: WeekStats }) {
+function peakHeight(wins: number, maxH: number): number {
+  if (wins < 0)  return 0            // future — flat
+  if (wins === 0) return 2            // missed — tiny ripple
+  if (wins === 1) return maxH * 0.27
+  if (wins === 2) return maxH * 0.60
+  return maxH
+}
+
+function buildPath(
+  week: Date[],
+  baseline: number,
+  maxH: number,
+  dayData: DayData
+): string {
+  const dayW = SVG_W / 7
+  const pw = dayW * 0.42  // half-width of each smooth hill
+
+  const segs: string[] = [`M 0,${baseline}`]
+
+  for (let i = 0; i < 7; i++) {
+    const cx = dayW * (i + 0.5)
+    const x0 = cx - pw
+    const x1 = cx + pw
+    const future = isFuture(week[i])
+    const entry  = dayData[dateKey(week[i])]
+    const wins   = winCount(entry, future)
+    const h      = peakHeight(wins, maxH)
+    const yPeak  = baseline - h
+
+    segs.push(`L ${x0},${baseline}`)
+
+    // Smooth sine-like hill: control points at 60% width, full height
+    segs.push(`C ${x0 + pw * 0.6},${baseline} ${cx - pw * 0.2},${yPeak} ${cx},${yPeak}`)
+    segs.push(`C ${cx + pw * 0.2},${yPeak} ${x1 - pw * 0.6},${baseline} ${x1},${baseline}`)
+  }
+
+  segs.push(`L ${SVG_W},${baseline}`)
+  return segs.join(' ')
+}
+
+function PulseWaveSVG({ weeks, dayData }: { weeks: Date[][]; dayData: DayData }) {
+  // useRef/useEffect kept for potential future use — animation is now SVG-native
+  const _ref = useRef<SVGPathElement>(null)
+  useEffect(() => {}, [])
+
+  const SWEEP_DUR = '5s'
+
   return (
-    <svg viewBox="0 0 200 200" className="w-56 h-56">
-      {CATEGORIES.map(key => {
-        const r = RING_RADII[key]
-        const circumference = 2 * Math.PI * r
-        const fill = stats.logged[key] / 7
-        const offset = circumference * (1 - fill)
-        const color = COLORS[key]
-        const { duration, delay } = RING_BREATHE[key]
+    <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }}>
+      <defs>
+        <linearGradient id="wave-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"   stopColor="#1D9E75" />
+          <stop offset="48%"  stopColor="#7F77DD" />
+          <stop offset="100%" stopColor="#D85A30" />
+        </linearGradient>
+        <linearGradient id="wave-grad-fill" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"   stopColor="#1D9E75" stopOpacity="0.15" />
+          <stop offset="48%"  stopColor="#7F77DD" stopOpacity="0.15" />
+          <stop offset="100%" stopColor="#D85A30" stopOpacity="0.15" />
+        </linearGradient>
+        {/* Sweeping clip — grows from 0 to full width then resets, like a monitor */}
+        <clipPath id="sweep-clip">
+          <rect x="0" y="-300" height="600" width="0">
+            <animate
+              attributeName="width"
+              from="0"
+              to={String(SVG_W)}
+              dur={SWEEP_DUR}
+              repeatCount="indefinite"
+              calcMode="linear"
+            />
+          </rect>
+        </clipPath>
+      </defs>
 
+      {/* Past week traces */}
+      {weeks.slice(0, -1).map((week, i) => {
+        const baseline = W_BASELINE[i]
+        const maxH     = W_MAX_H[i]
+        const basePath = buildPath(week, baseline, maxH, dayData)
+        const fillPath = `${basePath} L 0,${baseline} Z`
         return (
-          <g key={key}>
-            {/* Background track — static, always visible */}
-            <circle
-              cx={CX} cy={CY} r={r}
-              fill="none"
-              stroke={color}
-              strokeWidth={STROKE_WIDTH}
-              opacity={0.18}
-            />
-            {/* Filled arc — breathing */}
-            <circle
-              cx={CX} cy={CY} r={r}
-              fill="none"
-              stroke={color}
-              strokeWidth={STROKE_WIDTH}
-              strokeDasharray={circumference}
-              strokeDashoffset={fill === 0 ? circumference : offset}
-              strokeLinecap="round"
-              transform={`rotate(-90 ${CX} ${CY})`}
-              style={{
-                transition: 'stroke-dashoffset 1.2s ease-out',
-                animation: `ring-breathe ${duration} ease-in-out infinite`,
-                animationDelay: delay,
-                transformBox: 'fill-box',
-                transformOrigin: 'center',
-              }}
-            />
+          <g key={i} style={{ opacity: W_OPACITY[i] }}>
+            <path d={fillPath} fill="rgba(44,44,42,0.06)" stroke="none" />
+            <path d={basePath} fill="none" stroke="rgba(44,44,42,1)"
+              strokeWidth={W_STROKE[i]} strokeLinecap="round" strokeLinejoin="round" />
           </g>
         )
       })}
+
+      {/* Current week — ghost trace + animated sweep */}
+      {(() => {
+        const i        = weeks.length - 1
+        const baseline = W_BASELINE[i]
+        const maxH     = W_MAX_H[i]
+        const basePath = buildPath(weeks[i], baseline, maxH, dayData)
+        const fillPath = `${basePath} L 0,${baseline} Z`
+        return (
+          <g key="current">
+            {/* Ghost fill — always visible, dim */}
+            <path d={fillPath} fill="url(#wave-grad-fill)" stroke="none" opacity="0.4" />
+            {/* Ghost stroke — always visible, dim */}
+            <path d={basePath} fill="none" stroke="url(#wave-grad)"
+              strokeWidth={W_STROKE[i]} strokeLinecap="round" strokeLinejoin="round" opacity="0.18" />
+
+            {/* Bright swept portion — revealed by animated clip */}
+            <g clipPath="url(#sweep-clip)">
+              <path d={fillPath} fill="url(#wave-grad-fill)" stroke="none" />
+              <path d={basePath} fill="none" stroke="url(#wave-grad)"
+                strokeWidth={W_STROKE[i]} strokeLinecap="round" strokeLinejoin="round" />
+            </g>
+
+            {/* Scanning cursor line at leading edge */}
+            <line y1="0" y2={SVG_H} stroke="url(#wave-grad)" strokeWidth="1.5" opacity="0.35">
+              <animate attributeName="x1" from="0" to={String(SVG_W)} dur={SWEEP_DUR} repeatCount="indefinite" calcMode="linear" />
+              <animate attributeName="x2" from="0" to={String(SVG_W)} dur={SWEEP_DUR} repeatCount="indefinite" calcMode="linear" />
+            </line>
+          </g>
+        )
+      })()}
     </svg>
   )
 }
 
-// ── Week dots ─────────────────────────────────────────────────────────────────
+// ── Day indicator row ─────────────────────────────────────────────────────────
 
-function WeekDots({
-  weekDays,
-  days,
-  labels,
-}: {
-  weekDays: Date[]
-  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown }>
-  labels: Record<CategoryKey, { label: string }>
-}) {
-  const dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+function DayLabels({ week }: { week: Date[] }) {
   const todayStr = dateKey(new Date())
-
   return (
-    <div className="w-full flex flex-col gap-2">
-      {/* Day header — spacer matches category label width */}
-      <div className="flex items-center gap-2">
-        <div className="w-16 shrink-0" />
-        <div className="grid grid-cols-7 gap-1 flex-1">
-          {dayLetters.map((l, i) => (
-            <div
-              key={i}
-              className={`text-center font-sans text-xs ${
-                dateKey(weekDays[i]) === todayStr ? 'text-charcoal/60 font-medium' : 'text-charcoal/25'
-              }`}
-            >
-              {l}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Category rows */}
-      {CATEGORIES.map(key => (
-        <div key={key} className="flex items-center gap-2">
-          <span className={`font-sans text-xs uppercase tracking-widest w-16 shrink-0 ${ACCENT_TEXT[key]}`}>
-            {labels[key].label}
-          </span>
-          <div className="grid grid-cols-7 gap-1 flex-1">
-            {weekDays.map((d, i) => {
-              const future = isFuture(d)
-              const entry = days[dateKey(d)]
-              const logged = !future && entry && entry[key] !== null
-              return (
-                <div key={i} className="flex justify-center">
-                  <div
-                    className={`w-4 h-4 rounded-full transition-colors ${
-                      future
-                        ? 'bg-charcoal/5'
-                        : logged
-                        ? ''
-                        : 'bg-charcoal/10'
-                    }`}
-                    style={logged ? { backgroundColor: COLORS[key], opacity: 0.7 } : undefined}
-                  />
-                </div>
-              )
-            })}
+    <div className="grid grid-cols-7 w-full">
+      {week.map((day, i) => {
+        const isToday = dateKey(day) === todayStr
+        return (
+          <div key={i} className="text-center">
+            <span className={`font-sans text-xs ${isToday ? 'text-charcoal/60 font-medium' : 'text-charcoal/28'}`}>
+              {DAY_LABELS[i]}
+            </span>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -336,59 +350,51 @@ function WeekDots({
 
 export default function Pulse() {
   const { data } = useApp()
-  const weekDays = getWeekDays()
-  const stats = getWeekStats(data.days, weekDays)
-  const categories = data.onboarding.categories
-  const name = data.onboarding.name ?? ''
-  const letter = generateLetter(stats, categories, weekDays, name)
+  const weeks       = getLastNWeeks(5)
+  const currentWeek = weeks[weeks.length - 1]
+  const stats       = getWeekStats(data.days, currentWeek)
+  const categories  = data.onboarding.categories
+  const name        = data.onboarding.name ?? ''
+  const letter      = generateLetter(stats, categories, currentWeek, name)
 
   return (
-    <div className="min-h-screen bg-beige max-w-md mx-auto px-6 pt-12 pb-28 flex flex-col gap-10">
+    <div className="min-h-screen bg-beige max-w-md mx-auto px-6 pt-12 pb-28 flex flex-col gap-8">
       <div className="flex flex-col gap-1">
         <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Pulse</p>
-        <h1 className="font-serif text-2xl text-charcoal">This week</h1>
+        <h1 className="font-serif text-2xl text-charcoal">Your pulse</h1>
       </div>
 
-      {/* Rings */}
-      <div className="flex flex-col items-center gap-6">
-        <RingSVG stats={stats} />
-
-        {/* Ring legend */}
-        <div className="flex gap-6">
-          {CATEGORIES.map(key => (
-            <div key={key} className="flex flex-col items-center gap-1">
-              <span className={`font-sans text-xs uppercase tracking-widest ${ACCENT_TEXT[key]}`}>
-                {categories[key].label}
-              </span>
-              <span className="font-serif text-lg text-charcoal">
-                {stats.logged[key]}<span className="text-charcoal/30 text-sm">/7</span>
-              </span>
-            </div>
-          ))}
-        </div>
+      {/* Wave */}
+      <div className="flex flex-col gap-3">
+        <PulseWaveSVG weeks={weeks} dayData={data.days} />
+        <DayLabels week={currentWeek} />
       </div>
-
-      {/* Week dots */}
-      <WeekDots weekDays={weekDays} days={data.days} labels={categories} />
 
       {/* Weekly letter */}
       <div className="border-t border-charcoal/10 pt-6 flex flex-col gap-1">
-        <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40 mb-3">Weekly letter</p>
-        {letter.split('\n').map((line, i) => (
-          line === ''
-            ? <div key={i} className="h-2" />
-            : <p key={i} className={`font-serif leading-relaxed ${
+        <p className="font-sans text-xs uppercase tracking-widest text-charcoal/30 mb-3">
+          This week
+        </p>
+        {letter.split('\n').map((line, i) =>
+          line === '' ? (
+            <div key={i} className="h-2" />
+          ) : (
+            <p
+              key={i}
+              className={`font-serif leading-relaxed ${
                 line.startsWith('Dear')
                   ? 'text-charcoal text-lg'
                   : line === 'Pulse'
                   ? 'text-charcoal/50 text-base italic'
-                  : line === 'With you,'
+                  : line === 'Still with you.'
                   ? 'text-charcoal/40 text-sm'
                   : 'text-charcoal/70 text-sm'
-              }`}>
-                {line}
-              </p>
-        ))}
+              }`}
+            >
+              {line}
+            </p>
+          )
+        )}
       </div>
     </div>
   )

@@ -23,10 +23,15 @@ export default {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.4' },
         },
+        'fade-up-in': {
+          '0%':   { opacity: '0', transform: 'translateY(20px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
       },
       animation: {
-        'soft-pulse': 'soft-pulse 2s ease-in-out infinite',
+        'soft-pulse':  'soft-pulse 2s ease-in-out infinite',
         'ring-breathe': 'ring-breathe 3s ease-in-out infinite',
+        'fade-up-in':  'fade-up-in 0.55s ease-out forwards',
       },
     },
   },

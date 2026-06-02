@@ -11,6 +11,7 @@
  * Props: none. Reads from AppContext days data.
  */
 
+import { useState } from 'react'
 import { useApp } from '../context/AppContext'
 import type { CategoryKey } from '../types'
 
@@ -106,6 +107,7 @@ export default function History() {
   const { data } = useApp()
   const days30 = getLast30Days()
   const todayStr = dateKey(new Date())
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
 
   const firstDayOfWeek = (days30[0].getDay() + 6) % 7
   const padded: (Date | null)[] = [...Array(firstDayOfWeek).fill(null), ...days30]
@@ -114,7 +116,7 @@ export default function History() {
   const weeks: (Date | null)[][] = []
   for (let i = 0; i < padded.length; i += 7) weeks.push(padded.slice(i, i + 7))
 
-  const insight = generateInsight(days30, data.days, data.onboarding.categories)
+  const selectedEntry = selectedKey ? data.days[selectedKey] ?? null : null
 
   return (
     <div className="min-h-screen bg-beige max-w-md mx-auto px-6 pt-12 pb-28 flex flex-col gap-8">
@@ -136,19 +138,36 @@ export default function History() {
           <div key={wi} className="grid grid-cols-7 gap-1">
             {week.map((day, di) => {
               if (!day) return <div key={di} />
+              const key = dateKey(day)
               const state = getDayState(data.days, day)
-              const isToday = dateKey(day) === todayStr
+              const isToday = key === todayStr
+              const isSelected = key === selectedKey
               const dayNum = day.getDate()
 
               return (
                 <div key={di} className="flex items-center justify-center">
-                  <Cell state={state} dayNum={dayNum} isToday={isToday} />
+                  <Cell
+                    state={state}
+                    dayNum={dayNum}
+                    isToday={isToday}
+                    isSelected={isSelected}
+                    onClick={() => setSelectedKey(isSelected ? null : key)}
+                  />
                 </div>
               )
             })}
           </div>
         ))}
       </div>
+
+      {/* Selected day detail */}
+      {selectedKey && (
+        <DayDetail
+          dateKey={selectedKey}
+          entry={selectedEntry}
+          labels={data.onboarding.categories}
+        />
+      )}
 
       {/* Legend */}
       <div className="flex gap-5">
@@ -157,22 +176,25 @@ export default function History() {
         <LegendItem state="missed" label="Missed" />
       </div>
 
-      {/* Insight */}
-      <p className="font-serif text-base text-charcoal/60 leading-relaxed border-t border-charcoal/10 pt-6">
-        {insight}
-      </p>
     </div>
   )
 }
 
-function Cell({ state, dayNum, isToday }: { state: DayState; dayNum: number; isToday: boolean }) {
-  const base = 'w-9 h-9 rounded-full flex items-center justify-center transition-all'
+function Cell({
+  state, dayNum, isToday, isSelected, onClick,
+}: {
+  state: DayState; dayNum: number; isToday: boolean; isSelected: boolean; onClick: () => void
+}) {
+  const base = 'w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer'
+  const selectedRing = isSelected ? 'ring-2 ring-offset-2 ring-offset-beige ring-charcoal/50' : ''
+  const todayRing = isToday && !isSelected ? 'ring-2 ring-offset-2 ring-offset-beige ring-charcoal/20' : ''
 
   if (state === 'balanced') {
     return (
       <div
-        className={`${base} ${isToday ? 'ring-2 ring-offset-2 ring-offset-beige ring-charcoal/20' : ''}`}
+        className={`${base} ${todayRing} ${selectedRing}`}
         style={{ background: 'conic-gradient(#1D9E75 0deg, #7F77DD 120deg, #D85A30 240deg, #1D9E75 360deg)' }}
+        onClick={onClick}
       >
         <span className="font-sans text-xs font-medium text-white">{dayNum}</span>
       </div>
@@ -181,15 +203,65 @@ function Cell({ state, dayNum, isToday }: { state: DayState; dayNum: number; isT
 
   if (state === 'partial') {
     return (
-      <div className={`${base} bg-charcoal/15 ${isToday ? 'ring-2 ring-offset-2 ring-offset-beige ring-charcoal/20' : ''}`}>
+      <div className={`${base} bg-charcoal/15 ${todayRing} ${selectedRing}`} onClick={onClick}>
         <span className="font-sans text-xs text-charcoal/50">{dayNum}</span>
       </div>
     )
   }
 
   return (
-    <div className={`${base} bg-charcoal/8 ${isToday ? 'ring-2 ring-offset-2 ring-offset-beige ring-charcoal/20' : ''}`}>
+    <div className={`${base} bg-charcoal/8 ${todayRing} ${selectedRing}`} onClick={onClick}>
       <span className="font-sans text-xs text-charcoal/25">{dayNum}</span>
+    </div>
+  )
+}
+
+const CATEGORY_COLORS: Record<CategoryKey, string> = {
+  physical: '#1D9E75',
+  mental: '#7F77DD',
+  spiritual: '#D85A30',
+}
+
+function DayDetail({
+  dateKey: dk,
+  entry,
+  labels,
+}: {
+  dateKey: string
+  entry: { physical: { text: string; reflection?: string } | null; mental: { text: string; reflection?: string } | null; spiritual: { text: string; reflection?: string } | null } | null
+  labels: Record<CategoryKey, { label: string; definition: string }>
+}) {
+  const date = new Date(dk + 'T12:00:00')
+  const formatted = date.toLocaleDateString('default', { weekday: 'long', month: 'long', day: 'numeric' })
+
+  return (
+    <div className="bg-white/60 rounded-2xl px-5 py-4 flex flex-col gap-3">
+      <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">{formatted}</p>
+      {!entry || (entry.physical === null && entry.mental === null && entry.spiritual === null) ? (
+        <p className="font-serif text-sm text-charcoal/40 italic">No wins logged this day.</p>
+      ) : (
+        (['physical', 'mental', 'spiritual'] as CategoryKey[]).map(k => {
+          const win = entry?.[k]
+          if (!win) return (
+            <div key={k} className="flex gap-3 items-start opacity-30">
+              <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: CATEGORY_COLORS[k] }} />
+              <span className="font-sans text-sm text-charcoal/40">{labels[k].label} — not logged</span>
+            </div>
+          )
+          return (
+            <div key={k} className="flex gap-3 items-start">
+              <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: CATEGORY_COLORS[k] }} />
+              <div className="flex flex-col gap-0.5">
+                <span className="font-sans text-xs uppercase tracking-wider" style={{ color: CATEGORY_COLORS[k] }}>{labels[k].label}</span>
+                <span className="font-serif text-sm text-charcoal leading-snug">{win.text}</span>
+                {win.reflection && (
+                  <span className="font-sans text-xs text-charcoal/30">{win.reflection}</span>
+                )}
+              </div>
+            </div>
+          )
+        })
+      )}
     </div>
   )
 }

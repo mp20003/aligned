@@ -85,32 +85,14 @@ function getDailySuggestions(key: CategoryKey, dateStr: string): string[] {
   return [0, 1, 2].map(i => list[(seed + i) % list.length])
 }
 
-function buildPrompts(labels: Record<CategoryKey, { label: string }>) {
-  const p = labels.physical.label.toLowerCase()
-  const m = labels.mental.label.toLowerCase()
-  const s = labels.spiritual.label.toLowerCase()
-  return [
-    `What will your ${p}, ${m}, and ${s} look like today?`,
-    `Where is your ${p} practice calling you today?`,
-    `What does your ${m} need from you right now?`,
-    `How will you honour your ${s} today?`,
-    `Which of your three feels most neglected this week?`,
-    `What small act could serve your ${p} today?`,
-    `What would make today feel whole?`,
-  ]
-}
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function Today() {
   const { data, logWin } = useApp()
   const date = todayKey()
-  const day = new Date().getDay()
   const todayEntry = data.days[date] ?? { physical: null, mental: null, spiritual: null }
   const categories = data.onboarding.categories
-
-  const prompts = buildPrompts(categories)
-  const prompt = prompts[day % prompts.length]
 
   const allDone =
     todayEntry.physical !== null &&
@@ -118,11 +100,13 @@ export default function Today() {
     todayEntry.spiritual !== null
 
   const [aligned, setAligned] = useState(allDone)
+  const [fading, setFading] = useState(false)
 
   function handleWinLogged(justLogged: CategoryKey) {
     const others = (['physical', 'mental', 'spiritual'] as CategoryKey[]).filter(k => k !== justLogged)
     if (others.every(k => todayEntry[k] !== null)) {
-      setTimeout(() => setAligned(true), 400)
+      setFading(true)
+      setTimeout(() => setAligned(true), 500)
     }
   }
 
@@ -138,11 +122,17 @@ export default function Today() {
   }
 
   return (
-    <div className="min-h-screen bg-beige max-w-md mx-auto px-6 pt-12 pb-28 flex flex-col gap-8">
+    <div
+      className="min-h-screen bg-beige max-w-md mx-auto px-6 pt-12 pb-28 flex flex-col gap-8"
+      style={{
+        opacity: fading ? 0 : 1,
+        transform: fading ? 'translateY(-10px)' : 'translateY(0)',
+        transition: 'opacity 0.45s ease, transform 0.45s ease',
+      }}
+    >
       <div className="flex flex-col gap-1 pt-4">
         <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Today</p>
-        <h1 className="font-serif text-2xl text-charcoal leading-snug">{prompt}</h1>
-        <p className="font-sans text-xs text-charcoal/25 tracking-widest mt-1">— Pulse</p>
+        <h1 className="font-serif text-2xl text-charcoal leading-snug">What were your three wins today?</h1>
       </div>
 
       <div className="flex flex-col gap-4">
@@ -364,7 +354,7 @@ function AlignedState({ date, categories, todayEntry, onEdit }: AlignedStateProp
   })
 
   return (
-    <div className="min-h-screen bg-beige max-w-md mx-auto px-6 flex flex-col items-center justify-center gap-10 pb-28">
+    <div className="min-h-screen bg-beige max-w-md mx-auto px-6 flex flex-col items-center justify-center gap-10 pb-28 animate-fade-up-in">
       <div
         className="animate-soft-pulse flex items-center justify-center w-24 h-24 rounded-full p-1"
         style={{ background: 'conic-gradient(#1D9E75 0deg, #7F77DD 120deg, #D85A30 240deg, #1D9E75 360deg)' }}

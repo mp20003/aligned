@@ -28,9 +28,7 @@ const LINKS = [
     label: 'Pulse',
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2 : 1.5} strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="9" />
-        <circle cx="12" cy="12" r="5" />
-        <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+        <path d="M2 12 L6 12 L8 8 L9 12 L10.5 4 L12 18 L13 12 L15 10 L17 12 L22 12" />
       </svg>
     ),
   },

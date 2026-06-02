@@ -131,9 +131,9 @@ export default function Onboarding() {
       <Screen>
         <div className="flex flex-col items-center justify-center min-h-screen px-8 text-center gap-8">
           <div className="flex flex-col gap-3">
-            <p className="font-sans text-sm uppercase tracking-widest text-charcoal/50">Aligned</p>
+            <p className="font-sans text-sm uppercase tracking-widest text-charcoal/50">Pulse</p>
             <h1 className="font-serif text-4xl leading-tight text-charcoal">
-              One win.<br />Three parts of you.<br />Every day.
+              Three wins.<br />Three parts of you.<br />Every day.
             </h1>
           </div>
 
