@@ -19,6 +19,7 @@ export type CategoryConfig = {
 
 export type OnboardingData = {
   completed: boolean
+  name: string
   categories: Record<CategoryKey, CategoryConfig>
 }
 

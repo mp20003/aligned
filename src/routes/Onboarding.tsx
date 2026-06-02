@@ -102,6 +102,7 @@ export default function Onboarding() {
   }, [data.onboarding.completed, navigate])
 
   const [step, setStep] = useState(0)
+  const [name, setName] = useState('')
   const [drafts, setDrafts] = useState<Record<CategoryKey, CategoryDraft>>({
     physical:  { label: 'Physical',  customLabel: '', definition: '' },
     mental:    { label: 'Mental',    customLabel: '', definition: '' },
@@ -115,6 +116,7 @@ export default function Onboarding() {
   function handleFinish() {
     completeOnboarding({
       completed: true,
+      name: name.trim(),
       categories: {
         physical:  { label: drafts.physical.customLabel  || drafts.physical.label,  definition: drafts.physical.definition  },
         mental:    { label: drafts.mental.customLabel    || drafts.mental.label,    definition: drafts.mental.definition    },
@@ -134,12 +136,38 @@ export default function Onboarding() {
               One win.<br />Three parts of you.<br />Every day.
             </h1>
           </div>
-          <p className="font-sans text-base text-charcoal/60 max-w-xs leading-relaxed">
-            Before you start, tell us what each category means to you. This takes two minutes and shapes everything that follows.
-          </p>
+
+          {/* Pulse introduction */}
+          <div className="flex flex-col gap-2 max-w-xs">
+            <div
+              className="animate-soft-pulse w-10 h-10 rounded-full mx-auto mb-1 p-0.5"
+              style={{ background: 'conic-gradient(#1D9E75 0deg, #7F77DD 120deg, #D85A30 240deg, #1D9E75 360deg)' }}
+            >
+              <div className="w-full h-full rounded-full bg-beige" />
+            </div>
+            <p className="font-serif text-base text-charcoal/70 leading-relaxed">
+              Pulse is with you throughout.<br />It tracks your practice — quietly, consistently, without judgment.
+            </p>
+            <p className="font-sans text-xs text-charcoal/35 uppercase tracking-widest">It has always been there.</p>
+          </div>
+
+          {/* Name field */}
+          <div className="flex flex-col gap-2 w-full max-w-xs">
+            <label className="font-sans text-xs uppercase tracking-widest text-charcoal/40">
+              What should Pulse call you?
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Your name"
+              className="w-full bg-transparent border-b border-charcoal/20 py-2 font-serif text-lg text-charcoal text-center placeholder:text-charcoal/25 focus:outline-none focus:border-charcoal/50"
+            />
+          </div>
+
           <button
             onClick={() => setStep(1)}
-            className="mt-4 px-8 py-3 bg-charcoal text-beige font-sans text-sm rounded-full tracking-wide"
+            className="px-8 py-3 bg-charcoal text-beige font-sans text-sm rounded-full tracking-wide"
           >
             Begin
           </button>

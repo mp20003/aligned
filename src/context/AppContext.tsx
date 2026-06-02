@@ -6,6 +6,7 @@ const STORAGE_KEY = 'three-wins-data'
 const defaultData: AppData = {
   onboarding: {
     completed: false,
+    name: '',
     categories: {
       physical:  { label: 'Physical',  definition: '' },
       mental:    { label: 'Mental',    definition: '' },

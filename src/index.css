@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes ring-breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.65; transform: scale(1.07); }
+}
+
 @layer base {
   html, body {
     @apply bg-beige text-charcoal font-sans;

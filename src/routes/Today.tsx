@@ -142,6 +142,7 @@ export default function Today() {
       <div className="flex flex-col gap-1 pt-4">
         <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Today</p>
         <h1 className="font-serif text-2xl text-charcoal leading-snug">{prompt}</h1>
+        <p className="font-sans text-xs text-charcoal/25 tracking-widest mt-1">— Pulse</p>
       </div>
 
       <div className="flex flex-col gap-4">

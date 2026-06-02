@@ -101,13 +101,16 @@ function getWeekStats(
 function generateLetter(
   stats: WeekStats,
   labels: Record<CategoryKey, { label: string; definition: string }>,
-  weekDays: Date[]
+  weekDays: Date[],
+  name: string
 ): string {
   const { logged, reflections, aligned, elapsed } = stats
   const total = 7
 
+  const greeting = name ? `Dear ${name},` : `Dear you,`
+
   if (elapsed === 0) {
-    return `Dear you,\n\nThe week is just beginning. Three categories, seven days. Show up for one today and see how it feels.\n\nThe practice starts now.`
+    return `${greeting}\n\nThe week is just beginning. Three categories, seven days. Show up for one today and see how it feels.\n\nThe practice starts now.\n\nWith you,\nPulse`
   }
 
   const strongest = CATEGORIES.reduce((a, b) => logged[a] >= logged[b] ? a : b)
@@ -125,7 +128,7 @@ function generateLetter(
   let body = ''
 
   // Opening
-  const lines: string[] = [`Dear you,`, ``]
+  const lines: string[] = [greeting, ``]
 
   // Week context
   lines.push(`Week of ${weekStart} – ${weekEnd}.`)
@@ -192,6 +195,9 @@ function generateLetter(
 
   lines.push(``)
   lines.push(`Same time next week.`)
+  lines.push(``)
+  lines.push(`With you,`)
+  lines.push(`Pulse`)
 
   body = lines.join('\n')
   return body
@@ -208,6 +214,12 @@ const STROKE_WIDTH = 11
 const CX = 100
 const CY = 100
 
+const RING_BREATHE: Record<CategoryKey, { duration: string; delay: string }> = {
+  physical:  { duration: '3s',   delay: '0s'    },
+  mental:    { duration: '3.8s', delay: '0.5s'  },
+  spiritual: { duration: '4.6s', delay: '1.1s'  },
+}
+
 function RingSVG({ stats }: { stats: WeekStats }) {
   return (
     <svg viewBox="0 0 200 200" className="w-56 h-56">
@@ -217,18 +229,19 @@ function RingSVG({ stats }: { stats: WeekStats }) {
         const fill = stats.logged[key] / 7
         const offset = circumference * (1 - fill)
         const color = COLORS[key]
+        const { duration, delay } = RING_BREATHE[key]
 
         return (
           <g key={key}>
-            {/* Background track */}
+            {/* Background track — static, always visible */}
             <circle
               cx={CX} cy={CY} r={r}
               fill="none"
               stroke={color}
               strokeWidth={STROKE_WIDTH}
-              opacity={0.12}
+              opacity={0.18}
             />
-            {/* Filled arc */}
+            {/* Filled arc — breathing */}
             <circle
               cx={CX} cy={CY} r={r}
               fill="none"
@@ -238,7 +251,13 @@ function RingSVG({ stats }: { stats: WeekStats }) {
               strokeDashoffset={fill === 0 ? circumference : offset}
               strokeLinecap="round"
               transform={`rotate(-90 ${CX} ${CY})`}
-              style={{ transition: 'stroke-dashoffset 1.2s ease-out' }}
+              style={{
+                transition: 'stroke-dashoffset 1.2s ease-out',
+                animation: `ring-breathe ${duration} ease-in-out infinite`,
+                animationDelay: delay,
+                transformBox: 'fill-box',
+                transformOrigin: 'center',
+              }}
             />
           </g>
         )
@@ -263,18 +282,21 @@ function WeekDots({
 
   return (
     <div className="w-full flex flex-col gap-2">
-      {/* Day header */}
-      <div className="grid grid-cols-7 gap-1">
-        {dayLetters.map((l, i) => (
-          <div
-            key={i}
-            className={`text-center font-sans text-xs ${
-              dateKey(weekDays[i]) === todayStr ? 'text-charcoal/60 font-medium' : 'text-charcoal/25'
-            }`}
-          >
-            {l}
-          </div>
-        ))}
+      {/* Day header — spacer matches category label width */}
+      <div className="flex items-center gap-2">
+        <div className="w-16 shrink-0" />
+        <div className="grid grid-cols-7 gap-1 flex-1">
+          {dayLetters.map((l, i) => (
+            <div
+              key={i}
+              className={`text-center font-sans text-xs ${
+                dateKey(weekDays[i]) === todayStr ? 'text-charcoal/60 font-medium' : 'text-charcoal/25'
+              }`}
+            >
+              {l}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Category rows */}
@@ -317,7 +339,8 @@ export default function Pulse() {
   const weekDays = getWeekDays()
   const stats = getWeekStats(data.days, weekDays)
   const categories = data.onboarding.categories
-  const letter = generateLetter(stats, categories, weekDays)
+  const name = data.onboarding.name ?? ''
+  const letter = generateLetter(stats, categories, weekDays, name)
 
   return (
     <div className="min-h-screen bg-beige max-w-md mx-auto px-6 pt-12 pb-28 flex flex-col gap-10">
@@ -355,7 +378,13 @@ export default function Pulse() {
           line === ''
             ? <div key={i} className="h-2" />
             : <p key={i} className={`font-serif leading-relaxed ${
-                line === 'Dear you,' ? 'text-charcoal text-lg' : 'text-charcoal/70 text-sm'
+                line.startsWith('Dear')
+                  ? 'text-charcoal text-lg'
+                  : line === 'Pulse'
+                  ? 'text-charcoal/50 text-base italic'
+                  : line === 'With you,'
+                  ? 'text-charcoal/40 text-sm'
+                  : 'text-charcoal/70 text-sm'
               }`}>
                 {line}
               </p>
