@@ -66,6 +66,34 @@ const SUGGESTIONS: Record<CategoryKey, string[]> = {
 
 const REFLECTION_WORDS = ['Hard', 'Easy', 'Meaningful', 'Routine']
 
+// ── Daily reflective prompts ──────────────────────────────────────────────────
+
+// Each template receives the label of one category (physical / mental / spiritual).
+// Category cycles daily: day % 3 picks which one is referenced.
+const PROMPT_TEMPLATES: Array<(label: string) => string> = [
+  l => `Where is your ${l.toLowerCase()} practice calling you today?`,
+  l => `What would a genuine ${l.toLowerCase()} win feel like today?`,
+  l => `What does your ${l.toLowerCase()} need from you right now?`,
+  l => `What ${l.toLowerCase()} act would feel most intentional today?`,
+  l => `What's one honest step forward in your ${l.toLowerCase()} practice?`,
+  l => `What would it mean to truly show up for your ${l.toLowerCase()} today?`,
+  l => `How can you honour your ${l.toLowerCase()} practice today?`,
+  l => `What ${l.toLowerCase()} choice would you be proud of tonight?`,
+  l => `What does your ${l.toLowerCase()} practice need most from you this week?`,
+]
+
+function getDailyPrompt(
+  categories: Record<CategoryKey, { label: string }>,
+  dateStr: string
+): string {
+  const seed = dateSeed(dateStr)
+  const categoryOrder: CategoryKey[] = ['physical', 'mental', 'spiritual']
+  const key = categoryOrder[seed % 3]
+  const label = categories[key].label
+  const template = PROMPT_TEMPLATES[seed % PROMPT_TEMPLATES.length]
+  return template(label)
+}
+
 const ACCENT: Record<CategoryKey, { text: string; border: string; bg: string; bar: string }> = {
   physical:  { text: 'text-physical',  border: 'border-physical',  bg: 'bg-physical',  bar: 'bg-physical'  },
   mental:    { text: 'text-mental',    border: 'border-mental',    bg: 'bg-mental',    bar: 'bg-mental'    },
@@ -135,7 +163,8 @@ export default function Today() {
       <div className="flex items-start justify-between pt-4">
         <div className="flex flex-col gap-1">
           <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Today</p>
-          <h1 className="font-serif text-2xl text-charcoal leading-snug">What were your three wins today?</h1>
+          <h1 className="font-serif text-2xl text-charcoal leading-snug">{getDailyPrompt(categories, date)}</h1>
+          <p className="font-sans text-xs text-charcoal/30 mt-1">— Triova</p>
         </div>
         <button
           onClick={() => navigate('/settings')}
@@ -382,8 +411,9 @@ function AlignedState({ date, categories, todayEntry, onEdit }: AlignedStateProp
         <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">{formatted}</p>
         <h2 className="font-serif text-3xl text-charcoal">You're aligned today.</h2>
         <p className="font-sans text-sm text-charcoal/50 max-w-xs leading-relaxed">
-          You showed up for your body, your mind, and your{' '}
-          {categories.spiritual.label.toLowerCase()} practice.
+          You showed up for your {categories.physical.label.toLowerCase()},{' '}
+          your {categories.mental.label.toLowerCase()}, and your{' '}
+          {categories.spiritual.label.toLowerCase()} practice today.
         </p>
       </div>
 
