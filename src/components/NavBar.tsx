@@ -38,7 +38,7 @@ const LINKS = [
 
 export default function NavBar() {
   const { pathname } = useLocation()
-  if (pathname === '/onboarding') return null
+  if (pathname === '/onboarding' || pathname === '/settings') return null
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-beige border-t border-charcoal/8 max-w-md mx-auto">

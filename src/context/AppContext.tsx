@@ -34,6 +34,9 @@ type AppContextValue = {
   data: AppData
   completeOnboarding: (onboarding: OnboardingData) => void
   logWin: (date: string, category: 'physical' | 'mental' | 'spiritual', text: string, reflection?: string) => void
+  updateSettings: (name: string, categories: AppData['onboarding']['categories']) => void
+  resetPractice: () => void
+  restoreData: (imported: AppData) => void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -61,8 +64,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
   }, [data, update])
 
+  const updateSettings = useCallback((name: string, categories: AppData['onboarding']['categories']) => {
+    update({ ...data, onboarding: { ...data.onboarding, name, categories } })
+  }, [data, update])
+
+  const resetPractice = useCallback(() => {
+    update({ ...data, days: {} })
+  }, [data, update])
+
+  const restoreData = useCallback((imported: AppData) => {
+    update(imported)
+  }, [update])
+
   return (
-    <AppContext.Provider value={{ data, completeOnboarding, logWin }}>
+    <AppContext.Provider value={{ data, completeOnboarding, logWin, updateSettings, resetPractice, restoreData }}>
       {children}
     </AppContext.Provider>
   )

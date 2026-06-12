@@ -13,6 +13,7 @@
  */
 
 import { useState } from 'react'
+import { useNavigate } from 'react-router'
 import { useApp } from '../context/AppContext'
 import type { CategoryKey, WinEntry } from '../types'
 
@@ -90,6 +91,7 @@ function getDailySuggestions(key: CategoryKey, dateStr: string): string[] {
 
 export default function Today() {
   const { data, logWin } = useApp()
+  const navigate = useNavigate()
   const date = todayKey()
   const todayEntry = data.days[date] ?? { physical: null, mental: null, spiritual: null }
   const categories = data.onboarding.categories
@@ -130,9 +132,21 @@ export default function Today() {
         transition: 'opacity 0.45s ease, transform 0.45s ease',
       }}
     >
-      <div className="flex flex-col gap-1 pt-4">
-        <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Today</p>
-        <h1 className="font-serif text-2xl text-charcoal leading-snug">What were your three wins today?</h1>
+      <div className="flex items-start justify-between pt-4">
+        <div className="flex flex-col gap-1">
+          <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Today</p>
+          <h1 className="font-serif text-2xl text-charcoal leading-snug">What were your three wins today?</h1>
+        </div>
+        <button
+          onClick={() => navigate('/settings')}
+          className="mt-1 text-charcoal/25 hover:text-charcoal/50 transition-colors"
+          aria-label="Settings"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
       </div>
 
       <div className="flex flex-col gap-4">
