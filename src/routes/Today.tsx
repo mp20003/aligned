@@ -13,7 +13,7 @@
  */
 
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { useApp } from '../context/AppContext'
 import type { CategoryKey, WinEntry } from '../types'
 
@@ -117,35 +117,66 @@ function getDailySuggestions(key: CategoryKey, dateStr: string): string[] {
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
+function yesterdayKey() {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  return d.toISOString().split('T')[0]
+}
+
+function formatDateLabel(dateStr: string): string {
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('default', {
+    weekday: 'long', month: 'long', day: 'numeric',
+  })
+}
+
 export default function Today() {
   const { data, logWin } = useApp()
   const navigate = useNavigate()
-  const date = todayKey()
-  const todayEntry = data.days[date] ?? { physical: null, mental: null, spiritual: null }
-  const categories = data.onboarding.categories
+  const [searchParams] = useSearchParams()
 
-  const allDone =
-    todayEntry.physical !== null &&
-    todayEntry.mental !== null &&
-    todayEntry.spiritual !== null
+  const todayStr = todayKey()
+  const yesterdayStr = yesterdayKey()
+  const paramDate = searchParams.get('date')
+  const isViewingYesterday = paramDate === yesterdayStr
+  const date = isViewingYesterday ? yesterdayStr : todayStr
+
+  const entry = data.days[date] ?? { physical: null, mental: null, spiritual: null }
+  const categories = data.onboarding.categories
+  const isFirstDay = Object.keys(data.days).length === 0 && !isViewingYesterday
+
+  const allDone = entry.physical !== null && entry.mental !== null && entry.spiritual !== null
+  const yesterdayEntry = data.days[yesterdayStr]
+  const yesterdayEmpty = !yesterdayEntry || (
+    yesterdayEntry.physical === null && yesterdayEntry.mental === null && yesterdayEntry.spiritual === null
+  )
+
+  const isSunday = new Date().getDay() === 0
+  const sundayCheckinKey = `triova-sunday-${todayStr}`
+  const [sundayDone, setSundayDone] = useState(() => !!localStorage.getItem(sundayCheckinKey))
 
   const [aligned, setAligned] = useState(allDone)
   const [fading, setFading] = useState(false)
 
   function handleWinLogged(justLogged: CategoryKey) {
     const others = (['physical', 'mental', 'spiritual'] as CategoryKey[]).filter(k => k !== justLogged)
-    if (others.every(k => todayEntry[k] !== null)) {
+    const currentEntry = data.days[date] ?? { physical: null, mental: null, spiritual: null }
+    if (others.every(k => currentEntry[k] !== null)) {
       setFading(true)
       setTimeout(() => setAligned(true), 500)
     }
   }
 
-  if (aligned) {
+  function handleSundayCheckin(key: CategoryKey) {
+    localStorage.setItem(sundayCheckinKey, key)
+    setSundayDone(true)
+  }
+
+  if (aligned && !isViewingYesterday) {
     return (
       <AlignedState
         date={date}
         categories={categories}
-        todayEntry={todayEntry}
+        todayEntry={entry}
         onEdit={() => setAligned(false)}
       />
     )
@@ -153,31 +184,82 @@ export default function Today() {
 
   return (
     <div
-      className="min-h-screen bg-beige max-w-md mx-auto px-6 pt-12 pb-28 flex flex-col gap-8"
+      className="min-h-screen bg-beige dark:bg-beige-dark max-w-md mx-auto px-6 pt-12 pb-28 flex flex-col gap-8"
       style={{
         opacity: fading ? 0 : 1,
         transform: fading ? 'translateY(-10px)' : 'translateY(0)',
         transition: 'opacity 0.45s ease, transform 0.45s ease',
       }}
     >
+      {/* Header */}
       <div className="flex items-start justify-between pt-4">
         <div className="flex flex-col gap-1">
-          <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Today</p>
-          <h1 className="font-serif text-2xl text-charcoal leading-snug">{getDailyPrompt(categories, date)}</h1>
-          <p className="font-sans text-xs text-charcoal/30 mt-1">— Triova</p>
+          {isViewingYesterday ? (
+            <>
+              <button
+                onClick={() => navigate('/today')}
+                className="font-sans text-xs text-charcoal/40 flex items-center gap-1 mb-1"
+              >
+                ← Back to today
+              </button>
+              <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Yesterday</p>
+            </>
+          ) : (
+            <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Today</p>
+          )}
+          <p className="font-sans text-xs text-charcoal/30">{formatDateLabel(date)}</p>
+          <h1 className="font-serif text-2xl text-charcoal leading-snug mt-1">
+            {isViewingYesterday ? 'Log your wins for yesterday.' : getDailyPrompt(categories, date)}
+          </h1>
+          {!isViewingYesterday && <p className="font-sans text-xs text-charcoal/30 mt-0.5">— Triova</p>}
         </div>
-        <button
-          onClick={() => navigate('/settings')}
-          className="mt-1 text-charcoal/25 hover:text-charcoal/50 transition-colors"
-          aria-label="Settings"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
-        </button>
+        {!isViewingYesterday && (
+          <button
+            onClick={() => navigate('/settings')}
+            className="mt-1 text-charcoal/25 hover:text-charcoal/50 transition-colors"
+            aria-label="Settings"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
+        )}
       </div>
 
+      {/* First-day welcome */}
+      {isFirstDay && (
+        <div className="bg-white/50 rounded-2xl px-5 py-4 flex flex-col gap-2 border border-charcoal/8">
+          <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Day one</p>
+          <p className="font-serif text-sm text-charcoal/70 leading-relaxed">
+            This is where it begins. Three wins — one for each part of you. There's no right answer, only an honest one.
+          </p>
+          <p className="font-sans text-xs text-charcoal/30 italic">— Triova</p>
+        </div>
+      )}
+
+      {/* Sunday check-in */}
+      {isSunday && !sundayDone && !isViewingYesterday && (
+        <div className="bg-white/50 rounded-2xl px-5 py-4 flex flex-col gap-3 border border-charcoal/8">
+          <div className="flex flex-col gap-0.5">
+            <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">This week</p>
+            <p className="font-serif text-sm text-charcoal/70">Which part of you felt hardest to show up for?</p>
+          </div>
+          <div className="flex gap-2">
+            {(['physical', 'mental', 'spiritual'] as CategoryKey[]).map(key => (
+              <button
+                key={key}
+                onClick={() => handleSundayCheckin(key)}
+                className="flex-1 py-2 rounded-xl border border-charcoal/15 font-sans text-xs text-charcoal/60 bg-white/60 hover:bg-white/90 transition-colors"
+              >
+                {categories[key].label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Win cards */}
       <div className="flex flex-col gap-4">
         {(['physical', 'mental', 'spiritual'] as CategoryKey[]).map(key => (
           <WinCard
@@ -185,7 +267,7 @@ export default function Today() {
             categoryKey={key}
             label={categories[key].label}
             date={date}
-            existing={todayEntry[key]}
+            existing={entry[key]}
             pastWins={getPastWins(data.days, key, date)}
             dailySuggestions={getDailySuggestions(key, date)}
             onConfirm={(text, reflection) => {
@@ -196,7 +278,17 @@ export default function Today() {
         ))}
       </div>
 
-      <WinsProgress todayEntry={todayEntry} />
+      <WinsProgress todayEntry={entry} />
+
+      {/* Log yesterday link */}
+      {!isViewingYesterday && yesterdayEmpty && (
+        <button
+          onClick={() => navigate(`/today?date=${yesterdayStr}`)}
+          className="font-sans text-xs text-charcoal/30 underline underline-offset-4 text-center"
+        >
+          Log wins for yesterday
+        </button>
+      )}
     </div>
   )
 }

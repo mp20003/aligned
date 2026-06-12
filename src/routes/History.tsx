@@ -11,12 +11,69 @@
  * Props: none. Reads from AppContext days data.
  */
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useApp } from '../context/AppContext'
 import type { CategoryKey } from '../types'
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+function generateInsight(
+  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown }>,
+  labels: Record<CategoryKey, { label: string; definition: string }>,
+  days30: Date[]
+): string | null {
+  if (days30.filter(d => days[dateKey(d)]).length < 5) return null
+
+  const catCounts: Record<CategoryKey, number> = { physical: 0, mental: 0, spiritual: 0 }
+  const dowMisses: number[] = Array(7).fill(0)
+  const dowTotal: number[] = Array(7).fill(0)
+  let alignedCount = 0
+
+  for (const d of days30) {
+    const k = dateKey(d)
+    const entry = days[k]
+    const dow = d.getDay()
+    dowTotal[dow]++
+    if (!entry) { dowMisses[dow]++; continue }
+    const done = CATEGORIES.filter(cat => entry[cat] !== null).length
+    if (done === 3) alignedCount++
+    CATEGORIES.forEach(cat => { if (entry[cat] !== null) catCounts[cat]++ })
+    if (done === 0) dowMisses[dow]++
+  }
+
+  const total = days30.length
+  const weakest = CATEGORIES.reduce((a, b) => catCounts[a] <= catCounts[b] ? a : b)
+  const strongest = CATEGORIES.reduce((a, b) => catCounts[a] >= catCounts[b] ? a : b)
+
+  // Find the day of week with worst miss rate (min 3 occurrences)
+  let worstDow = -1, worstRate = 0
+  for (let i = 0; i < 7; i++) {
+    if (dowTotal[i] >= 3) {
+      const rate = dowMisses[i] / dowTotal[i]
+      if (rate > worstRate) { worstRate = rate; worstDow = i }
+    }
+  }
+
+  const alignedPct = Math.round((alignedCount / total) * 100)
+  const weakestPct = Math.round((catCounts[weakest] / total) * 100)
+  const strongestPct = Math.round((catCounts[strongest] / total) * 100)
+
+  if (weakestPct === 0 && total >= 7)
+    return `Your ${labels[weakest].label.toLowerCase()} practice hasn't appeared in 30 days. That's worth noticing.`
+  if (worstDow >= 0 && worstRate >= 0.5 && worstRate < 1)
+    return `${DAY_NAMES[worstDow]}s are your hardest day — you miss more than half of them.`
+  if (strongestPct >= 80 && weakestPct <= 40 && weakest !== strongest)
+    return `Your ${labels[strongest].label.toLowerCase()} practice is strong. Your ${labels[weakest].label.toLowerCase()} needs more of the same attention.`
+  if (alignedPct >= 70)
+    return `${alignedPct}% of your days in the last month were fully aligned. That's a real practice.`
+  if (alignedPct <= 20 && total >= 14)
+    return `Full alignment is rare right now. Even partial wins count — but the three-part day is where the shift happens.`
+  if (catCounts[strongest] === catCounts[weakest])
+    return `Your three practices are moving in balance. Keep going.`
+  return `Your ${labels[strongest].label.toLowerCase()} is your most consistent practice right now.`
+}
 
 function dateKey(d: Date) {
   return d.toISOString().split('T')[0]
@@ -48,11 +105,94 @@ function getDayState(
   return 'missed'
 }
 
+function generateShareCard(
+  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown }>,
+  days30: Date[],
+  name: string
+): string {
+  const CELL = 36, GAP = 6, PAD = 32
+  const cols = 7
+  const firstDow = (days30[0].getDay() + 6) % 7
+  const padded: (Date | null)[] = [...Array(firstDow).fill(null), ...days30]
+  while (padded.length % 7 !== 0) padded.push(null)
+  const rows = padded.length / 7
+  const W = cols * (CELL + GAP) - GAP + PAD * 2
+  const H = rows * (CELL + GAP) - GAP + PAD * 2 + 80
+
+  const canvas = document.createElement('canvas')
+  const scale = 2
+  canvas.width = W * scale
+  canvas.height = H * scale
+  const ctx = canvas.getContext('2d')!
+  ctx.scale(scale, scale)
+
+  // Background
+  ctx.fillStyle = '#F5F0E8'
+  ctx.fillRect(0, 0, W, H)
+
+  // Header
+  ctx.fillStyle = 'rgba(44,44,42,0.35)'
+  ctx.font = '500 11px Inter, system-ui, sans-serif'
+  ctx.fillText('TRIOVA', PAD, PAD - 4)
+  ctx.fillStyle = '#2C2C2A'
+  ctx.font = '600 18px Lora, Georgia, serif'
+  ctx.fillText(name ? `${name}'s last 30 days` : 'Last 30 days', PAD, PAD + 16)
+
+  // Grid
+  padded.forEach((day, i) => {
+    if (!day) return
+    const col = i % cols
+    const row = Math.floor(i / cols)
+    const x = PAD + col * (CELL + GAP)
+    const y = PAD + 44 + row * (CELL + GAP)
+    const cx = x + CELL / 2, cy = y + CELL / 2, r = CELL / 2
+
+    const k = dateKey(day)
+    const entry = days[k]
+    const done = entry ? CATEGORIES.filter(cat => entry[cat] !== null).length : 0
+
+    ctx.beginPath()
+    ctx.arc(cx, cy, r, 0, Math.PI * 2)
+
+    if (done === 3) {
+      const grad = ctx.createConicGradient(0, cx, cy)
+      grad.addColorStop(0,       '#1D9E75')
+      grad.addColorStop(1/3,     '#7F77DD')
+      grad.addColorStop(2/3,     '#D85A30')
+      grad.addColorStop(1,       '#1D9E75')
+      ctx.fillStyle = grad
+    } else if (done === 2) {
+      ctx.fillStyle = 'rgba(44,44,42,0.20)'
+    } else if (done === 1) {
+      ctx.fillStyle = 'rgba(44,44,42,0.10)'
+    } else {
+      ctx.fillStyle = 'rgba(44,44,42,0.05)'
+    }
+    ctx.fill()
+  })
+
+  // Footer
+  ctx.fillStyle = 'rgba(44,44,42,0.25)'
+  ctx.font = '400 10px Inter, system-ui, sans-serif'
+  ctx.fillText('triova.app', PAD, H - 12)
+
+  return canvas.toDataURL('image/png')
+}
+
 export default function History() {
   const { data } = useApp()
   const days30 = getLast30Days()
   const todayStr = dateKey(new Date())
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const shareRef = useRef<HTMLAnchorElement>(null)
+
+  function handleShare() {
+    const dataUrl = generateShareCard(data.days, days30, data.onboarding.name)
+    const a = shareRef.current!
+    a.href = dataUrl
+    a.download = `triova-${dateKey(new Date())}.png`
+    a.click()
+  }
 
   const firstDayOfWeek = (days30[0].getDay() + 6) % 7
   const padded: (Date | null)[] = [...Array(firstDayOfWeek).fill(null), ...days30]
@@ -65,9 +205,23 @@ export default function History() {
 
   return (
     <div className="min-h-screen bg-beige max-w-md mx-auto px-6 pt-12 pb-28 flex flex-col gap-8">
-      <div className="flex flex-col gap-1">
-        <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">History</p>
-        <h1 className="font-serif text-2xl text-charcoal">Last 30 days</h1>
+      <div className="flex items-start justify-between">
+        <div className="flex flex-col gap-1">
+          <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">History</p>
+          <h1 className="font-serif text-2xl text-charcoal">Last 30 days</h1>
+        </div>
+        <button
+          onClick={handleShare}
+          className="mt-2 text-charcoal/25 hover:text-charcoal/50 transition-colors"
+          aria-label="Share"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+            <polyline points="16 6 12 2 8 6" />
+            <line x1="12" y1="2" x2="12" y2="15" />
+          </svg>
+        </button>
+        <a ref={shareRef} className="hidden" />
       </div>
 
       <div className="flex flex-col gap-2">
@@ -112,6 +266,16 @@ export default function History() {
           entry={selectedEntry}
           labels={data.onboarding.categories}
         />
+      )}
+
+      {/* Insight */}
+      {generateInsight(data.days, data.onboarding.categories, days30) && (
+        <div className="border-t border-charcoal/10 pt-5 flex flex-col gap-1">
+          <p className="font-sans text-xs uppercase tracking-widest text-charcoal/30">Pattern</p>
+          <p className="font-serif text-sm text-charcoal/65 leading-relaxed">
+            {generateInsight(data.days, data.onboarding.categories, days30)}
+          </p>
+        </div>
       )}
 
       {/* Legend */}

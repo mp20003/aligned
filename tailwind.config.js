@@ -1,14 +1,15 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
       colors: {
-        beige: '#F5F0E8',
-        charcoal: '#2C2C2A',
+        beige:    'rgb(var(--color-beige) / <alpha-value>)',
+        charcoal: 'rgb(var(--color-charcoal) / <alpha-value>)',
         physical: '#1D9E75',
-        mental: '#7F77DD',
-        spiritual: '#D85A30',
+        mental:   '#7F77DD',
+        spiritual:'#D85A30',
       },
       fontFamily: {
         serif: ['Lora', 'Georgia', 'serif'],

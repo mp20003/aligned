@@ -12,6 +12,16 @@
   50% { opacity: 0.55; }
 }
 
+:root {
+  --color-beige: 245 240 232;
+  --color-charcoal: 44 44 42;
+}
+
+.dark {
+  --color-beige: 28 26 20;
+  --color-charcoal: 232 228 216;
+}
+
 @layer base {
   html, body {
     @apply bg-beige text-charcoal font-sans;
@@ -22,3 +32,10 @@
     @apply font-serif;
   }
 }
+
+/* Dark mode card surfaces — white/opacity needs a nudge in dark */
+.dark .bg-white\/40 { background-color: rgba(255 255 255 / 0.05) !important; }
+.dark .bg-white\/50 { background-color: rgba(255 255 255 / 0.06) !important; }
+.dark .bg-white\/60 { background-color: rgba(255 255 255 / 0.07) !important; }
+.dark .bg-white\/30 { background-color: rgba(255 255 255 / 0.04) !important; }
+.dark .bg-white\/80 { background-color: rgba(255 255 255 / 0.10) !important; }

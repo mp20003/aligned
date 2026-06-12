@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 import type { AppData, OnboardingData } from '../types'
 
 const STORAGE_KEY = 'three-wins-data'
+const DARK_KEY = 'triova-dark'
 
 const defaultData: AppData = {
   onboarding: {
@@ -32,6 +33,8 @@ function save(data: AppData) {
 
 type AppContextValue = {
   data: AppData
+  darkMode: boolean
+  toggleDarkMode: () => void
   completeOnboarding: (onboarding: OnboardingData) => void
   logWin: (date: string, category: 'physical' | 'mental' | 'spiritual', text: string, reflection?: string) => void
   updateSettings: (name: string, categories: AppData['onboarding']['categories']) => void
@@ -43,6 +46,19 @@ const AppContext = createContext<AppContextValue | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(load)
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem(DARK_KEY) === 'true')
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode)
+  }, [darkMode])
+
+  const toggleDarkMode = useCallback(() => {
+    setDarkMode(d => {
+      const next = !d
+      localStorage.setItem(DARK_KEY, String(next))
+      return next
+    })
+  }, [])
 
   const update = useCallback((next: AppData) => {
     save(next)
@@ -77,7 +93,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [update])
 
   return (
-    <AppContext.Provider value={{ data, completeOnboarding, logWin, updateSettings, resetPractice, restoreData }}>
+    <AppContext.Provider value={{ data, darkMode, toggleDarkMode, completeOnboarding, logWin, updateSettings, resetPractice, restoreData }}>
       {children}
     </AppContext.Provider>
   )
