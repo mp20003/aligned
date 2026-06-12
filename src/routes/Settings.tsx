@@ -28,7 +28,7 @@ const ACCENT_BORDER: Record<CategoryKey, string> = {
 }
 
 export default function Settings() {
-  const { data, darkMode, toggleDarkMode, updateSettings, resetPractice, restoreData } = useApp()
+  const { data, updateSettings, resetPractice, restoreData } = useApp()
   const navigate = useNavigate()
 
   const [name, setName] = useState(data.onboarding.name)
@@ -142,20 +142,6 @@ export default function Settings() {
       >
         {saved ? 'Saved' : 'Save changes'}
       </button>
-
-      {/* Appearance */}
-      <section className="flex flex-col gap-3 border-t border-charcoal/10 pt-6">
-        <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Appearance</p>
-        <div className="flex items-center justify-between bg-white/40 rounded-xl px-4 py-3">
-          <span className="font-sans text-sm text-charcoal/70">Dark mode</span>
-          <button
-            onClick={toggleDarkMode}
-            className={`w-11 h-6 rounded-full transition-colors duration-200 relative ${darkMode ? 'bg-charcoal' : 'bg-charcoal/20'}`}
-          >
-            <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${darkMode ? 'translate-x-5' : 'translate-x-0.5'}`} />
-          </button>
-        </div>
-      </section>
 
       {/* Data */}
       <section className="flex flex-col gap-3 border-t border-charcoal/10 pt-6">
