@@ -25,10 +25,12 @@ const LINKS = [
   },
   {
     to: '/score',
-    label: 'Pulse',
+    label: 'Triova',
     icon: (active: boolean) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2 : 1.5} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M2 12 L6 12 L8 8 L9 12 L10.5 4 L12 18 L13 12 L15 10 L17 12 L22 12" />
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" strokeLinecap="round">
+        <path d="M 11,2 A 9,9 0 0,1 18.79,15.5" stroke="#1D9E75" strokeWidth={active ? 2 : 1.5} />
+        <path d="M 18.79,15.5 A 9,9 0 0,1 3.21,15.5" stroke="#7F77DD" strokeWidth={active ? 2 : 1.5} />
+        <path d="M 3.21,15.5 A 9,9 0 0,1 11,2" stroke="#D85A30" strokeWidth={active ? 2 : 1.5} />
       </svg>
     ),
   },

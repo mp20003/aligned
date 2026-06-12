@@ -131,30 +131,34 @@ export default function Onboarding() {
       <Screen>
         <div className="flex flex-col items-center justify-center min-h-screen px-8 text-center gap-8">
           <div className="flex flex-col gap-3">
-            <p className="font-sans text-sm uppercase tracking-widest text-charcoal/50">Pulse</p>
+            <p className="font-sans text-sm uppercase tracking-widest text-charcoal/50">Triova</p>
             <h1 className="font-serif text-4xl leading-tight text-charcoal">
               Three wins.<br />Three parts of you.<br />Every day.
             </h1>
           </div>
 
           {/* Pulse introduction */}
-          <div className="flex flex-col gap-2 max-w-xs">
+          <div className="flex flex-col gap-4 max-w-xs">
             <div
-              className="animate-soft-pulse w-10 h-10 rounded-full mx-auto mb-1 p-0.5"
+              className="animate-soft-pulse w-10 h-10 rounded-full mx-auto p-0.5"
               style={{ background: 'conic-gradient(#1D9E75 0deg, #7F77DD 120deg, #D85A30 240deg, #1D9E75 360deg)' }}
             >
               <div className="w-full h-full rounded-full bg-beige" />
             </div>
-            <p className="font-serif text-base text-charcoal/70 leading-relaxed">
-              Pulse is with you throughout.<br />It tracks your practice — quietly, consistently, without judgment.
+            <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Meet Triova</p>
+            <p className="font-serif text-base text-charcoal/75 leading-relaxed">
+              Triova is not an AI. It's a presence — the quiet part of you that already knows what you need.
             </p>
-            <p className="font-sans text-xs text-charcoal/35 uppercase tracking-widest">It has always been there.</p>
+            <p className="font-serif text-base text-charcoal/75 leading-relaxed">
+              It watches your practice without judgment. Every day, it speaks to what it sees in you.
+            </p>
+            <p className="font-sans text-xs text-charcoal/30 uppercase tracking-widest">It has always been there.</p>
           </div>
 
           {/* Name field */}
           <div className="flex flex-col gap-2 w-full max-w-xs">
             <label className="font-sans text-xs uppercase tracking-widest text-charcoal/40">
-              What should Pulse call you?
+              What should Triova call you?
             </label>
             <input
               type="text"

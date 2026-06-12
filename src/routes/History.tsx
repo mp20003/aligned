@@ -32,7 +32,7 @@ function getLast30Days(): Date[] {
   return days
 }
 
-type DayState = 'balanced' | 'partial' | 'missed'
+type DayState = 'balanced' | 'partial-2' | 'partial-1' | 'missed'
 
 function getDayState(
   days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown }>,
@@ -43,7 +43,8 @@ function getDayState(
   if (!entry) return 'missed'
   const done = CATEGORIES.filter(k => entry[k] !== null).length
   if (done === 3) return 'balanced'
-  if (done > 0) return 'partial'
+  if (done === 2) return 'partial-2'
+  if (done === 1) return 'partial-1'
   return 'missed'
 }
 
@@ -114,9 +115,10 @@ export default function History() {
       )}
 
       {/* Legend */}
-      <div className="flex gap-5">
-        <LegendItem state="balanced" label="Balanced" />
-        <LegendItem state="partial" label="Partial" />
+      <div className="flex gap-4 flex-wrap">
+        <LegendItem state="balanced" label="All three" />
+        <LegendItem state="partial-2" label="Two wins" />
+        <LegendItem state="partial-1" label="One win" />
         <LegendItem state="missed" label="Missed" />
       </div>
 
@@ -145,17 +147,25 @@ function Cell({
     )
   }
 
-  if (state === 'partial') {
+  if (state === 'partial-2') {
     return (
-      <div className={`${base} bg-charcoal/15 ${todayRing} ${selectedRing}`} onClick={onClick}>
-        <span className="font-sans text-xs text-charcoal/50">{dayNum}</span>
+      <div className={`${base} bg-charcoal/20 ${todayRing} ${selectedRing}`} onClick={onClick}>
+        <span className="font-sans text-xs text-charcoal/60">{dayNum}</span>
+      </div>
+    )
+  }
+
+  if (state === 'partial-1') {
+    return (
+      <div className={`${base} bg-charcoal/10 ${todayRing} ${selectedRing}`} onClick={onClick}>
+        <span className="font-sans text-xs text-charcoal/40">{dayNum}</span>
       </div>
     )
   }
 
   return (
-    <div className={`${base} bg-charcoal/8 ${todayRing} ${selectedRing}`} onClick={onClick}>
-      <span className="font-sans text-xs text-charcoal/25">{dayNum}</span>
+    <div className={`${base} bg-charcoal/5 ${todayRing} ${selectedRing}`} onClick={onClick}>
+      <span className="font-sans text-xs text-charcoal/20">{dayNum}</span>
     </div>
   )
 }
@@ -211,12 +221,17 @@ function DayDetail({
 }
 
 function LegendItem({ state, label }: { state: DayState; label: string }) {
+  const dotClass =
+    state === 'balanced'  ? '' :
+    state === 'partial-2' ? 'bg-charcoal/20' :
+    state === 'partial-1' ? 'bg-charcoal/10' :
+                            'bg-charcoal/5'
   return (
     <div className="flex items-center gap-2">
       {state === 'balanced' ? (
         <div className="w-3 h-3 rounded-full shrink-0" style={{ background: 'conic-gradient(#1D9E75 0deg, #7F77DD 120deg, #D85A30 240deg, #1D9E75 360deg)' }} />
       ) : (
-        <div className={`w-3 h-3 rounded-full shrink-0 ${state === 'partial' ? 'bg-charcoal/15' : 'bg-charcoal/8'}`} />
+        <div className={`w-3 h-3 rounded-full shrink-0 ${dotClass}`} />
       )}
       <span className="font-sans text-xs text-charcoal/40">{label}</span>
     </div>

@@ -59,6 +59,7 @@ function getLastNWeeks(n: number): Date[][] {
   return weeks
 }
 
+
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 type WeekStats = {
@@ -108,10 +109,10 @@ function generateLetter(
 ): string {
   const { logged, reflections, aligned, elapsed } = stats
   const remaining = 7 - elapsed
-  const greeting = name ? `Dearest ${name},` : `Dearest you,`
+  const greeting = name ? `Dear ${name},` : `Dear you,`
 
   if (elapsed === 0) {
-    return `${greeting}\n\nA new week. The same invitation — three parts of you, one day at a time.\n\nYou don't have to be perfect. You just have to begin.\n\nStill with you.\n\nPulse`
+    return `${greeting}\n\nA new week. The same invitation — three parts of you, one day at a time.\n\nYou don't have to be perfect. You just have to begin.\n\nStill with you.\n\nTriova`
   }
 
   const strongest = CATEGORIES.reduce((a, b) => logged[a] >= logged[b] ? a : b)
@@ -124,7 +125,6 @@ function generateLetter(
 
   const lines: string[] = [greeting, ``]
 
-  // Opening — tone varies by alignment pattern
   if (aligned === elapsed && elapsed >= 4) {
     lines.push(`Every single day this week, you showed up for all three parts of yourself. That's rare. Most people never find that rhythm — you're living it.`)
   } else if (aligned >= Math.ceil(elapsed * 0.7) && elapsed >= 3) {
@@ -139,14 +139,12 @@ function generateLetter(
 
   lines.push(``)
 
-  // What's held strong
   if (logged[strongest] === elapsed && elapsed >= 2) {
     lines.push(`Your ${strongestLabel} practice hasn't wavered. Whatever else fell away this week, that held. That's something to trust in yourself.`)
   } else if (logged[strongest] >= 3) {
     lines.push(`Your ${strongestLabel} practice has been your anchor this week — showing up more consistently than anything else.`)
   }
 
-  // What's been quiet — only if meaningfully different and worth naming
   if (logged[weakest] === 0 && elapsed >= 3) {
     lines.push(`Your ${weakestLabel} has gone quiet. Not a failure — but worth sitting with. Sometimes what we avoid is what we most need.`)
   } else if (logged[weakest] < logged[strongest] - 2 && elapsed >= 4) {
@@ -155,7 +153,6 @@ function generateLetter(
 
   lines.push(``)
 
-  // Reflection-based personal note
   if (hardDays >= 3) {
     lines.push(`You showed up on hard days. That's not something everyone does. The practice is easiest when life is easy — what you're building is something that holds when it isn't.`)
   } else if (hardDays >= 1 && meaningfulDays >= 1) {
@@ -166,7 +163,6 @@ function generateLetter(
     lines.push(`At least one day this week felt truly meaningful to you. Let that be the signal — not the exception.`)
   }
 
-  // Looking ahead or closing
   if (remaining > 0 && remaining <= 3) {
     lines.push(`${remaining === 1 ? 'One day' : `${remaining} days`} left. The week closes however you choose to close it.`)
   } else if (remaining === 0) {
@@ -176,7 +172,7 @@ function generateLetter(
   lines.push(``)
   lines.push(`Still with you.`)
   lines.push(``)
-  lines.push(`Pulse`)
+  lines.push(`Triova`)
 
   return lines.join('\n')
 }
@@ -348,7 +344,7 @@ export default function Pulse() {
   return (
     <div className="min-h-screen bg-beige max-w-md mx-auto px-6 pt-12 pb-28 flex flex-col gap-8">
       <div className="flex flex-col gap-1">
-        <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Pulse</p>
+        <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Triova</p>
         <h1 className="font-serif text-2xl text-charcoal">Your pulse</h1>
       </div>
 
@@ -372,7 +368,7 @@ export default function Pulse() {
               className={`font-serif leading-relaxed ${
                 line.startsWith('Dear')
                   ? 'text-charcoal text-lg'
-                  : line === 'Pulse'
+                  : line === 'Triova'
                   ? 'text-charcoal/50 text-base italic'
                   : line === 'Still with you.'
                   ? 'text-charcoal/40 text-sm'
