@@ -149,7 +149,7 @@ function generateLetter(
   const quote = getDailyQuote(todayStr)
 
   if (elapsed === 0) {
-    return `${greeting}\n\nA new week. The same invitation — three parts of you, one day at a time.\n\nYou don't have to be perfect. You just have to begin.\n\n"${quote}"\n\nStill with you.\n\nTriova`
+    return `${greeting}\n\nA new week. The same invitation: three parts of you, one day at a time.\n\nYou don't have to be perfect. You just have to begin.\n\n"${quote}"\n\nStill with you.\n\nTriova`
   }
 
   const strongest = CATEGORIES.reduce((a, b) => logged[a] >= logged[b] ? a : b)
@@ -163,15 +163,15 @@ function generateLetter(
   const lines: string[] = [greeting, ``]
 
   if (aligned === elapsed && elapsed >= 4) {
-    lines.push(`Every single day this week, you showed up for all three parts of yourself. That's rare. Most people never find that rhythm — you're living it.`)
+    lines.push(`Every single day this week, you showed up for all three parts of yourself. That's rare. Most people never find that rhythm. You're living it.`)
   } else if (aligned >= Math.ceil(elapsed * 0.7) && elapsed >= 3) {
-    lines.push(`You've been whole more often than not this week. That consistency is the whole point — not perfection, just presence, most days.`)
+    lines.push(`You've been whole more often than not this week. That consistency is the whole point, not perfection, just presence, most days.`)
   } else if (elapsed >= 3 && aligned === 0) {
-    lines.push(`This week has been fragmented — pieces here and there, nothing fully complete. That's real life. The week isn't over, and one whole day changes the feeling of all of them.`)
+    lines.push(`This week has been fragmented, pieces here and there, nothing fully complete. That's real life. The week isn't over, and one whole day changes the feeling of all of them.`)
   } else if (elapsed <= 2) {
     lines.push(`You're early in the week. What you build from here is still entirely yours to shape.`)
   } else {
-    lines.push(`Some days whole, some days not. That's the honest shape of a real week — and you kept logging it, which means you kept paying attention.`)
+    lines.push(`Some days whole, some days not. That's the honest shape of a real week, and you kept logging it, which means you kept paying attention.`)
   }
 
   lines.push(``)
@@ -179,31 +179,31 @@ function generateLetter(
   if (logged[strongest] === elapsed && elapsed >= 2) {
     lines.push(`Your ${strongestLabel} practice hasn't wavered. Whatever else fell away this week, that held. That's something to trust in yourself.`)
   } else if (logged[strongest] >= 3) {
-    lines.push(`Your ${strongestLabel} practice has been your anchor this week — showing up more consistently than anything else.`)
+    lines.push(`Your ${strongestLabel} practice has been your anchor this week, showing up more consistently than anything else.`)
   }
 
   if (logged[weakest] === 0 && elapsed >= 3) {
-    lines.push(`Your ${weakestLabel} has gone quiet. Not a failure — but worth sitting with. Sometimes what we avoid is what we most need.`)
+    lines.push(`Your ${weakestLabel} has gone quiet. Not a failure, but worth sitting with. Sometimes what we avoid is what we most need.`)
   } else if (logged[weakest] < logged[strongest] - 2 && elapsed >= 4) {
-    lines.push(`Your ${weakestLabel} has been harder to reach this week. Notice that without judgment — just notice.`)
+    lines.push(`Your ${weakestLabel} has been harder to reach this week. Notice that without judgment. Just notice.`)
   }
 
   lines.push(``)
 
   if (hardDays >= 3) {
-    lines.push(`You showed up on hard days. That's not something everyone does. The practice is easiest when life is easy — what you're building is something that holds when it isn't.`)
+    lines.push(`You showed up on hard days. That's not something everyone does. The practice is easiest when life is easy. What you're building is something that holds when it isn't.`)
   } else if (hardDays >= 1 && meaningfulDays >= 1) {
-    lines.push(`Hard days and meaningful ones — you've had both this week. That range is what a real practice looks like.`)
+    lines.push(`Hard days and meaningful ones, you've had both this week. That range is what a real practice looks like.`)
   } else if (meaningfulDays >= 3) {
     lines.push(`So many of your days this week felt meaningful. That's not an accident. That's what showing up for yourself actually does.`)
   } else if (meaningfulDays >= 1) {
-    lines.push(`At least one day this week felt truly meaningful to you. Let that be the signal — not the exception.`)
+    lines.push(`At least one day this week felt truly meaningful to you. Let that be the signal, not the exception.`)
   }
 
   if (remaining > 0 && remaining <= 3) {
     lines.push(`${remaining === 1 ? 'One day' : `${remaining} days`} left. The week closes however you choose to close it.`)
   } else if (remaining === 0) {
-    lines.push(`The week is done. It belongs to you now — all of it.`)
+    lines.push(`The week is done. It belongs to you now, all of it.`)
   }
 
   lines.push(``)
@@ -386,6 +386,9 @@ export default function Pulse() {
       <div className="flex flex-col gap-1">
         <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/40">Triova</p>
         <h1 className="font-serif text-2xl lg:text-4xl text-charcoal">Your pulse</h1>
+        <p className="font-sans text-xs lg:text-sm text-charcoal/40 leading-relaxed max-w-md mt-1">
+          Each line traces one week. A tall peak means all three wins landed that day, a smaller one means partial, and a flat stretch means the day passed quietly. Older weeks fade behind the current one.
+        </p>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-10 lg:gap-16">
