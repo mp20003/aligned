@@ -36,6 +36,7 @@ export default function WinCard({ categoryKey, label, existing, pastWins, dailyS
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(existing?.text ?? '')
   const [reflecting, setReflecting] = useState(false)
+  const [skipped, setSkipped] = useState(false)
   const accent = ACCENT[categoryKey]
 
   function handleDone() {
@@ -46,6 +47,24 @@ export default function WinCard({ categoryKey, label, existing, pastWins, dailyS
     onConfirm(value.trim(), word)
     setReflecting(false)
     setEditing(false)
+  }
+
+  // Skipped state — deliberately no win for this category
+  if (skipped && !existing) {
+    return (
+      <div className="rounded-2xl border border-charcoal/10 bg-white/20 px-5 lg:px-6 py-4 lg:py-5 flex items-center justify-between">
+        <span className={`font-sans text-xs lg:text-sm uppercase tracking-widest ${accent.text} opacity-50`}>{label}</span>
+        <div className="flex items-center gap-3">
+          <span className="font-serif text-sm lg:text-base text-charcoal/30 italic">No win today</span>
+          <button
+            onClick={() => setSkipped(false)}
+            className="font-sans text-xs lg:text-sm text-charcoal/30 underline underline-offset-2"
+          >
+            Add one
+          </button>
+        </div>
+      </div>
+    )
   }
 
   // Confirmed state
@@ -147,7 +166,15 @@ export default function WinCard({ categoryKey, label, existing, pastWins, dailyS
         className="w-full bg-transparent font-serif text-base lg:text-lg text-charcoal placeholder:text-charcoal/25 focus:outline-none resize-none leading-snug border-t border-charcoal/10 pt-3"
       />
 
-      <div className="flex justify-end">
+      <div className="flex justify-end items-center gap-4">
+        {!value.trim() && (
+          <button
+            onClick={() => setSkipped(true)}
+            className="font-sans text-xs lg:text-sm text-charcoal/30 underline underline-offset-2"
+          >
+            No win today
+          </button>
+        )}
         <button
           onClick={handleDone}
           disabled={!value.trim()}
