@@ -266,7 +266,7 @@ export default function History() {
           </div>
         </div>
 
-        {/* Side panel: insight + day detail */}
+        {/* Side panel: insight + balance + day detail */}
         <div className="flex flex-col gap-6 lg:gap-8 flex-1">
           {generateInsight(data.days, data.onboarding.categories, days30) && (
             <div className="border-t lg:border-t-0 border-charcoal/10 pt-5 lg:pt-0 flex flex-col gap-1">
@@ -276,6 +276,8 @@ export default function History() {
               </p>
             </div>
           )}
+
+          <BalanceBars days={data.days} labels={data.onboarding.categories} days30={days30} />
 
           {selectedKey && selectedEntry ? (
             <DayEditor
@@ -372,6 +374,62 @@ function DayEditor({
             onConfirm={(text, reflection) => onConfirm(key, text, reflection)}
           />
         ))}
+      </div>
+    </div>
+  )
+}
+
+const CATEGORY_BG: Record<CategoryKey, string> = {
+  physical: 'bg-physical',
+  mental: 'bg-mental',
+  spiritual: 'bg-spiritual',
+}
+const CATEGORY_TEXT: Record<CategoryKey, string> = {
+  physical: 'text-physical',
+  mental: 'text-mental',
+  spiritual: 'text-spiritual',
+}
+
+function BalanceBars({
+  days,
+  labels,
+  days30,
+}: {
+  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown }>
+  labels: Record<CategoryKey, { label: string; definition: string }>
+  days30: Date[]
+}) {
+  const total = days30.length
+  const counts: Record<CategoryKey, number> = { physical: 0, mental: 0, spiritual: 0 }
+  for (const d of days30) {
+    const entry = days[dateKey(d)]
+    if (!entry) continue
+    CATEGORIES.forEach(k => { if (entry[k] !== null) counts[k]++ })
+  }
+
+  if (Object.values(counts).every(c => c === 0)) return null
+
+  return (
+    <div className="flex flex-col gap-3 lg:gap-4">
+      <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/30">Balance</p>
+      <div className="flex flex-col gap-2.5 lg:gap-3">
+        {CATEGORIES.map(k => {
+          const pct = Math.round((counts[k] / total) * 100)
+          return (
+            <div key={k} className="flex items-center gap-3">
+              <span className={`font-sans text-xs lg:text-sm uppercase tracking-widest w-20 lg:w-24 shrink-0 ${CATEGORY_TEXT[k]}`}>
+                {labels[k].label}
+              </span>
+              <div className="flex-1 h-2 lg:h-2.5 rounded-full bg-charcoal/8 overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${CATEGORY_BG[k]} transition-all duration-500`}
+                  style={{ width: `${pct}%`, opacity: 0.75 }}
+                />
+              </div>
+              <span className="font-sans text-xs lg:text-sm text-charcoal/30 w-10 text-right shrink-0">{pct}%</span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
