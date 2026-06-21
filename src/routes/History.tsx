@@ -204,11 +204,11 @@ export default function History() {
   const selectedEntry = selectedKey ? data.days[selectedKey] ?? null : null
 
   return (
-    <div className="min-h-screen bg-beige max-w-md mx-auto px-6 pt-12 pb-28 flex flex-col gap-8">
+    <div className="min-h-screen bg-beige max-w-md lg:max-w-4xl mx-auto px-6 pt-12 pb-28 flex flex-col gap-8">
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1">
           <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">History</p>
-          <h1 className="font-serif text-2xl text-charcoal">Last 30 days</h1>
+          <h1 className="font-serif text-2xl lg:text-3xl text-charcoal">Last 30 days</h1>
         </div>
         <button
           onClick={handleShare}
@@ -224,68 +224,73 @@ export default function History() {
         <a ref={shareRef} className="hidden" />
       </div>
 
-      <div className="flex flex-col gap-2">
-        {/* Day headers */}
-        <div className="grid grid-cols-7 gap-1">
-          {DAYS.map((d, i) => (
-            <div key={i} className="text-center font-sans text-xs text-charcoal/30">{d}</div>
-          ))}
-        </div>
-
-        {/* Weeks */}
-        {weeks.map((week, wi) => (
-          <div key={wi} className="grid grid-cols-7 gap-1">
-            {week.map((day, di) => {
-              if (!day) return <div key={di} />
-              const key = dateKey(day)
-              const state = getDayState(data.days, day)
-              const isToday = key === todayStr
-              const isSelected = key === selectedKey
-              const dayNum = day.getDate()
-
-              return (
-                <div key={di} className="flex items-center justify-center">
-                  <Cell
-                    state={state}
-                    dayNum={dayNum}
-                    isToday={isToday}
-                    isSelected={isSelected}
-                    onClick={() => setSelectedKey(isSelected ? null : key)}
-                  />
-                </div>
-              )
-            })}
+      <div className="flex flex-col lg:flex-row gap-10">
+        {/* Grid */}
+        <div className="flex flex-col gap-2 lg:w-[340px] lg:shrink-0">
+          <div className="grid grid-cols-7 gap-1 lg:gap-2">
+            {DAYS.map((d, i) => (
+              <div key={i} className="text-center font-sans text-xs text-charcoal/30">{d}</div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* Selected day detail */}
-      {selectedKey && (
-        <DayDetail
-          dateKey={selectedKey}
-          entry={selectedEntry}
-          labels={data.onboarding.categories}
-        />
-      )}
+          {weeks.map((week, wi) => (
+            <div key={wi} className="grid grid-cols-7 gap-1 lg:gap-2">
+              {week.map((day, di) => {
+                if (!day) return <div key={di} />
+                const key = dateKey(day)
+                const state = getDayState(data.days, day)
+                const isToday = key === todayStr
+                const isSelected = key === selectedKey
+                const dayNum = day.getDate()
 
-      {/* Insight */}
-      {generateInsight(data.days, data.onboarding.categories, days30) && (
-        <div className="border-t border-charcoal/10 pt-5 flex flex-col gap-1">
-          <p className="font-sans text-xs uppercase tracking-widest text-charcoal/30">Pattern</p>
-          <p className="font-serif text-sm text-charcoal/65 leading-relaxed">
-            {generateInsight(data.days, data.onboarding.categories, days30)}
-          </p>
+                return (
+                  <div key={di} className="flex items-center justify-center">
+                    <Cell
+                      state={state}
+                      dayNum={dayNum}
+                      isToday={isToday}
+                      isSelected={isSelected}
+                      onClick={() => setSelectedKey(isSelected ? null : key)}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+
+          {/* Legend */}
+          <div className="flex gap-4 flex-wrap mt-4">
+            <LegendItem state="balanced" label="All three" />
+            <LegendItem state="partial-2" label="Two wins" />
+            <LegendItem state="partial-1" label="One win" />
+            <LegendItem state="missed" label="Missed" />
+          </div>
         </div>
-      )}
 
-      {/* Legend */}
-      <div className="flex gap-4 flex-wrap">
-        <LegendItem state="balanced" label="All three" />
-        <LegendItem state="partial-2" label="Two wins" />
-        <LegendItem state="partial-1" label="One win" />
-        <LegendItem state="missed" label="Missed" />
+        {/* Side panel: insight + day detail */}
+        <div className="flex flex-col gap-6 flex-1">
+          {generateInsight(data.days, data.onboarding.categories, days30) && (
+            <div className="border-t lg:border-t-0 border-charcoal/10 pt-5 lg:pt-0 flex flex-col gap-1">
+              <p className="font-sans text-xs uppercase tracking-widest text-charcoal/30">Pattern</p>
+              <p className="font-serif text-base text-charcoal/65 leading-relaxed">
+                {generateInsight(data.days, data.onboarding.categories, days30)}
+              </p>
+            </div>
+          )}
+
+          {selectedKey ? (
+            <DayDetail
+              dateKey={selectedKey}
+              entry={selectedEntry}
+              labels={data.onboarding.categories}
+            />
+          ) : (
+            <p className="hidden lg:block font-sans text-sm text-charcoal/30 italic">
+              Tap any day to see what you logged.
+            </p>
+          )}
+        </div>
       </div>
-
     </div>
   )
 }

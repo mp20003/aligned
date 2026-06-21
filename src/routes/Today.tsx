@@ -184,7 +184,7 @@ export default function Today() {
 
   return (
     <div
-      className="min-h-screen bg-beige dark:bg-beige-dark max-w-md mx-auto px-6 pt-12 pb-28 flex flex-col gap-8"
+      className="min-h-screen bg-beige max-w-md lg:max-w-3xl mx-auto px-6 pt-12 pb-28 flex flex-col gap-8"
       style={{
         opacity: fading ? 0 : 1,
         transform: fading ? 'translateY(-10px)' : 'translateY(0)',
@@ -208,7 +208,7 @@ export default function Today() {
             <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Today</p>
           )}
           <p className="font-sans text-xs text-charcoal/30">{formatDateLabel(date)}</p>
-          <h1 className="font-serif text-2xl text-charcoal leading-snug mt-1">
+          <h1 className="font-serif text-2xl lg:text-3xl text-charcoal leading-snug mt-1 max-w-xl">
             {isViewingYesterday ? 'Log your wins for yesterday.' : getDailyPrompt(categories, date)}
           </h1>
           {!isViewingYesterday && <p className="font-sans text-xs text-charcoal/30 mt-0.5">— Triova</p>}
@@ -260,7 +260,7 @@ export default function Today() {
       )}
 
       {/* Win cards */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4">
         {(['physical', 'mental', 'spiritual'] as CategoryKey[]).map(key => (
           <WinCard
             key={key}
@@ -489,7 +489,7 @@ function AlignedState({ date, categories, todayEntry, onEdit }: AlignedStateProp
   })
 
   return (
-    <div className="min-h-screen bg-beige max-w-md mx-auto px-6 flex flex-col items-center justify-center gap-10 pb-28 animate-fade-up-in">
+    <div className="min-h-screen bg-beige max-w-md lg:max-w-lg mx-auto px-6 flex flex-col items-center justify-center gap-10 pb-28 animate-fade-up-in">
       <div
         className="animate-soft-pulse flex items-center justify-center w-24 h-24 rounded-full p-1"
         style={{ background: 'conic-gradient(#1D9E75 0deg, #7F77DD 120deg, #D85A30 240deg, #1D9E75 360deg)' }}

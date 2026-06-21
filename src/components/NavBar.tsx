@@ -41,7 +41,7 @@ export default function NavBar() {
   if (pathname === '/onboarding' || pathname === '/settings') return null
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-beige border-t border-charcoal/8 max-w-md mx-auto">
+    <nav className="fixed bottom-0 left-0 right-0 bg-beige border-t border-charcoal/8 max-w-md mx-auto lg:max-w-xs lg:bottom-6 lg:rounded-2xl lg:border lg:shadow-lg">
       <div className="flex justify-around items-center py-3 px-6">
         {LINKS.map(({ to, label, icon }) => {
           const active = pathname === to

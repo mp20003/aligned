@@ -10,7 +10,11 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
-      "Bash(\"C:\\\\Program Files\\\\nodejs\\\\node.exe\" scripts/generate-icon.js)"
+      "Bash(\"C:\\\\Program Files\\\\nodejs\\\\node.exe\" scripts/generate-icon.js)",
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(mkdir -p \"C:\\\\Users\\\\m4nnp\\\\OneDrive\\\\Desktop\\\\the-human-economy\\\\css\" \"C:\\\\Users\\\\m4nnp\\\\OneDrive\\\\Desktop\\\\the-human-economy\\\\js\")",
+      "Read(//c/Users/m4nnp/OneDrive/Desktop/**)"
     ]
   }
 }

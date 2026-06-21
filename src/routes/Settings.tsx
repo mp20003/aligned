@@ -85,7 +85,7 @@ export default function Settings() {
   const dayCount = Object.keys(data.days).length
 
   return (
-    <div className="min-h-screen bg-beige max-w-md mx-auto px-6 pt-12 pb-28 flex flex-col gap-8">
+    <div className="min-h-screen bg-beige max-w-md lg:max-w-xl mx-auto px-6 pt-12 pb-28 flex flex-col gap-8">
 
       {/* Header */}
       <div className="flex items-center justify-between">

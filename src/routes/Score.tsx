@@ -342,43 +342,45 @@ export default function Pulse() {
   const letter      = generateLetter(stats, categories, currentWeek, name)
 
   return (
-    <div className="min-h-screen bg-beige max-w-md mx-auto px-6 pt-12 pb-28 flex flex-col gap-8">
+    <div className="min-h-screen bg-beige max-w-md lg:max-w-4xl mx-auto px-6 pt-12 pb-28 flex flex-col gap-8">
       <div className="flex flex-col gap-1">
         <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Triova</p>
-        <h1 className="font-serif text-2xl text-charcoal">Your pulse</h1>
+        <h1 className="font-serif text-2xl lg:text-3xl text-charcoal">Your pulse</h1>
       </div>
 
-      {/* Wave */}
-      <div className="flex flex-col gap-3">
-        <PulseWaveSVG weeks={weeks} dayData={data.days} />
-        <DayLabels week={currentWeek} />
-      </div>
+      <div className="flex flex-col lg:flex-row gap-10">
+        {/* Wave */}
+        <div className="flex flex-col gap-3 lg:w-[360px] lg:shrink-0">
+          <PulseWaveSVG weeks={weeks} dayData={data.days} />
+          <DayLabels week={currentWeek} />
+        </div>
 
-      {/* Weekly letter */}
-      <div className="border-t border-charcoal/10 pt-6 flex flex-col gap-1">
-        <p className="font-sans text-xs uppercase tracking-widest text-charcoal/30 mb-3">
-          This week
-        </p>
-        {letter.split('\n').map((line, i) =>
-          line === '' ? (
-            <div key={i} className="h-2" />
-          ) : (
-            <p
-              key={i}
-              className={`font-serif leading-relaxed ${
-                line.startsWith('Dear')
-                  ? 'text-charcoal text-lg'
-                  : line === 'Triova'
-                  ? 'text-charcoal/50 text-base italic'
-                  : line === 'Still with you.'
-                  ? 'text-charcoal/40 text-sm'
-                  : 'text-charcoal/70 text-sm'
-              }`}
-            >
-              {line}
-            </p>
-          )
-        )}
+        {/* Weekly letter */}
+        <div className="border-t lg:border-t-0 border-charcoal/10 pt-6 lg:pt-0 flex flex-col gap-1 flex-1">
+          <p className="font-sans text-xs uppercase tracking-widest text-charcoal/30 mb-3">
+            This week
+          </p>
+          {letter.split('\n').map((line, i) =>
+            line === '' ? (
+              <div key={i} className="h-2" />
+            ) : (
+              <p
+                key={i}
+                className={`font-serif leading-relaxed ${
+                  line.startsWith('Dear')
+                    ? 'text-charcoal text-lg'
+                    : line === 'Triova'
+                    ? 'text-charcoal/50 text-base italic'
+                    : line === 'Still with you.'
+                    ? 'text-charcoal/40 text-sm'
+                    : 'text-charcoal/70 text-sm'
+                }`}
+              >
+                {line}
+              </p>
+            )
+          )}
+        </div>
       </div>
     </div>
   )
