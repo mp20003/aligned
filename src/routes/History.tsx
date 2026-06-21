@@ -17,7 +17,7 @@ import { useState, useRef } from 'react'
 import { useApp } from '../context/AppContext'
 import { getDailySuggestions, getPastWins } from '../data/suggestions'
 import WinCard from '../components/WinCard'
-import type { CategoryKey } from '../types'
+import type { CategoryKey, DayEntry } from '../types'
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
@@ -351,9 +351,9 @@ function DayEditor({
   onConfirm,
 }: {
   dateKey: string
-  entry: { physical: { text: string; reflection?: string } | null; mental: { text: string; reflection?: string } | null; spiritual: { text: string; reflection?: string } | null }
+  entry: DayEntry
   labels: Record<CategoryKey, { label: string; definition: string }>
-  allDays: Record<string, { physical: { text: string } | null; mental: { text: string } | null; spiritual: { text: string } | null }>
+  allDays: Record<string, DayEntry>
   onConfirm: (key: CategoryKey, text: string, reflection: string) => void
 }) {
   const date = new Date(dk + 'T12:00:00')
