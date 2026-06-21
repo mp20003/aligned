@@ -3,16 +3,20 @@
  *
  * 30-day grid of daily alignment states. Each cell is a circle showing the
  * date number, coloured by balanced (all 3 wins), partial (1–2), or missed.
- * One insight sentence derived from the pattern.
+ * One insight sentence derived from the pattern. Clicking any day opens an
+ * editable detail panel — wins can be logged or edited for any day in the
+ * grid (all of which are today or earlier).
  *
  * Never shows streaks, percentages, or counts. Missed days are data, not
  * failure.
  *
- * Props: none. Reads from AppContext days data.
+ * Props: none. Reads/writes via AppContext.
  */
 
 import { useState, useRef } from 'react'
 import { useApp } from '../context/AppContext'
+import { getDailySuggestions, getPastWins } from '../data/suggestions'
+import WinCard from '../components/WinCard'
 import type { CategoryKey } from '../types'
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
@@ -47,7 +51,6 @@ function generateInsight(
   const weakest = CATEGORIES.reduce((a, b) => catCounts[a] <= catCounts[b] ? a : b)
   const strongest = CATEGORIES.reduce((a, b) => catCounts[a] >= catCounts[b] ? a : b)
 
-  // Find the day of week with worst miss rate (min 3 occurrences)
   let worstDow = -1, worstRate = 0
   for (let i = 0; i < 7; i++) {
     if (dowTotal[i] >= 3) {
@@ -126,11 +129,9 @@ function generateShareCard(
   const ctx = canvas.getContext('2d')!
   ctx.scale(scale, scale)
 
-  // Background
   ctx.fillStyle = '#F5F0E8'
   ctx.fillRect(0, 0, W, H)
 
-  // Header
   ctx.fillStyle = 'rgba(44,44,42,0.35)'
   ctx.font = '500 11px Inter, system-ui, sans-serif'
   ctx.fillText('TRIOVA', PAD, PAD - 4)
@@ -138,7 +139,6 @@ function generateShareCard(
   ctx.font = '600 18px Lora, Georgia, serif'
   ctx.fillText(name ? `${name}'s last 30 days` : 'Last 30 days', PAD, PAD + 16)
 
-  // Grid
   padded.forEach((day, i) => {
     if (!day) return
     const col = i % cols
@@ -171,7 +171,6 @@ function generateShareCard(
     ctx.fill()
   })
 
-  // Footer
   ctx.fillStyle = 'rgba(44,44,42,0.25)'
   ctx.font = '400 10px Inter, system-ui, sans-serif'
   ctx.fillText('triova.app', PAD, H - 12)
@@ -180,7 +179,7 @@ function generateShareCard(
 }
 
 export default function History() {
-  const { data } = useApp()
+  const { data, logWin } = useApp()
   const days30 = getLast30Days()
   const todayStr = dateKey(new Date())
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
@@ -201,21 +200,21 @@ export default function History() {
   const weeks: (Date | null)[][] = []
   for (let i = 0; i < padded.length; i += 7) weeks.push(padded.slice(i, i + 7))
 
-  const selectedEntry = selectedKey ? data.days[selectedKey] ?? null : null
+  const selectedEntry = selectedKey ? data.days[selectedKey] ?? { physical: null, mental: null, spiritual: null } : null
 
   return (
-    <div className="min-h-screen bg-beige max-w-md lg:max-w-4xl mx-auto px-6 pt-12 pb-28 flex flex-col gap-8">
+    <div className="min-h-screen bg-beige max-w-md lg:max-w-6xl mx-auto px-6 lg:px-10 pt-12 lg:pt-16 pb-28 flex flex-col gap-8 lg:gap-10">
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1">
-          <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">History</p>
-          <h1 className="font-serif text-2xl lg:text-3xl text-charcoal">Last 30 days</h1>
+          <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/40">History</p>
+          <h1 className="font-serif text-2xl lg:text-4xl text-charcoal">Last 30 days</h1>
         </div>
         <button
           onClick={handleShare}
           className="mt-2 text-charcoal/25 hover:text-charcoal/50 transition-colors"
           aria-label="Share"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="lg:w-6 lg:h-6">
             <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
             <polyline points="16 6 12 2 8 6" />
             <line x1="12" y1="2" x2="12" y2="15" />
@@ -224,17 +223,17 @@ export default function History() {
         <a ref={shareRef} className="hidden" />
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-10">
+      <div className="flex flex-col lg:flex-row gap-10 lg:gap-14">
         {/* Grid */}
-        <div className="flex flex-col gap-2 lg:w-[340px] lg:shrink-0">
-          <div className="grid grid-cols-7 gap-1 lg:gap-2">
+        <div className="flex flex-col gap-2 lg:gap-3 lg:w-[420px] lg:shrink-0">
+          <div className="grid grid-cols-7 gap-1 lg:gap-3">
             {DAYS.map((d, i) => (
-              <div key={i} className="text-center font-sans text-xs text-charcoal/30">{d}</div>
+              <div key={i} className="text-center font-sans text-xs lg:text-sm text-charcoal/30">{d}</div>
             ))}
           </div>
 
           {weeks.map((week, wi) => (
-            <div key={wi} className="grid grid-cols-7 gap-1 lg:gap-2">
+            <div key={wi} className="grid grid-cols-7 gap-1 lg:gap-3">
               {week.map((day, di) => {
                 if (!day) return <div key={di} />
                 const key = dateKey(day)
@@ -268,25 +267,27 @@ export default function History() {
         </div>
 
         {/* Side panel: insight + day detail */}
-        <div className="flex flex-col gap-6 flex-1">
+        <div className="flex flex-col gap-6 lg:gap-8 flex-1">
           {generateInsight(data.days, data.onboarding.categories, days30) && (
             <div className="border-t lg:border-t-0 border-charcoal/10 pt-5 lg:pt-0 flex flex-col gap-1">
-              <p className="font-sans text-xs uppercase tracking-widest text-charcoal/30">Pattern</p>
-              <p className="font-serif text-base text-charcoal/65 leading-relaxed">
+              <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/30">Pattern</p>
+              <p className="font-serif text-base lg:text-lg text-charcoal/65 leading-relaxed">
                 {generateInsight(data.days, data.onboarding.categories, days30)}
               </p>
             </div>
           )}
 
-          {selectedKey ? (
-            <DayDetail
+          {selectedKey && selectedEntry ? (
+            <DayEditor
               dateKey={selectedKey}
               entry={selectedEntry}
               labels={data.onboarding.categories}
+              allDays={data.days}
+              onConfirm={(key, text, reflection) => logWin(selectedKey, key, text, reflection)}
             />
           ) : (
-            <p className="hidden lg:block font-sans text-sm text-charcoal/30 italic">
-              Tap any day to see what you logged.
+            <p className="hidden lg:block font-sans text-sm lg:text-base text-charcoal/30 italic">
+              Click any day to log or edit wins for it.
             </p>
           )}
         </div>
@@ -300,9 +301,10 @@ function Cell({
 }: {
   state: DayState; dayNum: number; isToday: boolean; isSelected: boolean; onClick: () => void
 }) {
-  const base = 'w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer'
+  const base = 'w-9 h-9 lg:w-12 lg:h-12 rounded-full flex items-center justify-center transition-all cursor-pointer hover:scale-105'
   const selectedRing = isSelected ? 'ring-2 ring-offset-2 ring-offset-beige ring-charcoal/50' : ''
   const todayRing = isToday && !isSelected ? 'ring-2 ring-offset-2 ring-offset-beige ring-charcoal/20' : ''
+  const textSize = 'text-xs lg:text-sm'
 
   if (state === 'balanced') {
     return (
@@ -311,7 +313,7 @@ function Cell({
         style={{ background: 'conic-gradient(#1D9E75 0deg, #7F77DD 120deg, #D85A30 240deg, #1D9E75 360deg)' }}
         onClick={onClick}
       >
-        <span className="font-sans text-xs font-medium text-white">{dayNum}</span>
+        <span className={`font-sans ${textSize} font-medium text-white`}>{dayNum}</span>
       </div>
     )
   }
@@ -319,7 +321,7 @@ function Cell({
   if (state === 'partial-2') {
     return (
       <div className={`${base} bg-charcoal/20 ${todayRing} ${selectedRing}`} onClick={onClick}>
-        <span className="font-sans text-xs text-charcoal/60">{dayNum}</span>
+        <span className={`font-sans ${textSize} text-charcoal/60`}>{dayNum}</span>
       </div>
     )
   }
@@ -327,64 +329,50 @@ function Cell({
   if (state === 'partial-1') {
     return (
       <div className={`${base} bg-charcoal/10 ${todayRing} ${selectedRing}`} onClick={onClick}>
-        <span className="font-sans text-xs text-charcoal/40">{dayNum}</span>
+        <span className={`font-sans ${textSize} text-charcoal/40`}>{dayNum}</span>
       </div>
     )
   }
 
   return (
     <div className={`${base} bg-charcoal/5 ${todayRing} ${selectedRing}`} onClick={onClick}>
-      <span className="font-sans text-xs text-charcoal/20">{dayNum}</span>
+      <span className={`font-sans ${textSize} text-charcoal/20`}>{dayNum}</span>
     </div>
   )
 }
 
-const CATEGORY_COLORS: Record<CategoryKey, string> = {
-  physical: '#1D9E75',
-  mental: '#7F77DD',
-  spiritual: '#D85A30',
-}
-
-function DayDetail({
+function DayEditor({
   dateKey: dk,
   entry,
   labels,
+  allDays,
+  onConfirm,
 }: {
   dateKey: string
-  entry: { physical: { text: string; reflection?: string } | null; mental: { text: string; reflection?: string } | null; spiritual: { text: string; reflection?: string } | null } | null
+  entry: { physical: { text: string; reflection?: string } | null; mental: { text: string; reflection?: string } | null; spiritual: { text: string; reflection?: string } | null }
   labels: Record<CategoryKey, { label: string; definition: string }>
+  allDays: Record<string, { physical: { text: string } | null; mental: { text: string } | null; spiritual: { text: string } | null }>
+  onConfirm: (key: CategoryKey, text: string, reflection: string) => void
 }) {
   const date = new Date(dk + 'T12:00:00')
   const formatted = date.toLocaleDateString('default', { weekday: 'long', month: 'long', day: 'numeric' })
 
   return (
-    <div className="bg-white/60 rounded-2xl px-5 py-4 flex flex-col gap-3">
-      <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">{formatted}</p>
-      {!entry || (entry.physical === null && entry.mental === null && entry.spiritual === null) ? (
-        <p className="font-serif text-sm text-charcoal/40 italic">No wins logged this day.</p>
-      ) : (
-        (['physical', 'mental', 'spiritual'] as CategoryKey[]).map(k => {
-          const win = entry?.[k]
-          if (!win) return (
-            <div key={k} className="flex gap-3 items-start opacity-30">
-              <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: CATEGORY_COLORS[k] }} />
-              <span className="font-sans text-sm text-charcoal/40">{labels[k].label} — not logged</span>
-            </div>
-          )
-          return (
-            <div key={k} className="flex gap-3 items-start">
-              <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: CATEGORY_COLORS[k] }} />
-              <div className="flex flex-col gap-0.5">
-                <span className="font-sans text-xs uppercase tracking-wider" style={{ color: CATEGORY_COLORS[k] }}>{labels[k].label}</span>
-                <span className="font-serif text-sm text-charcoal leading-snug">{win.text}</span>
-                {win.reflection && (
-                  <span className="font-sans text-xs text-charcoal/30">{win.reflection}</span>
-                )}
-              </div>
-            </div>
-          )
-        })
-      )}
+    <div className="flex flex-col gap-4">
+      <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/40">{formatted}</p>
+      <div className="flex flex-col gap-3 lg:gap-4">
+        {CATEGORIES.map(key => (
+          <WinCard
+            key={key}
+            categoryKey={key}
+            label={labels[key].label}
+            existing={entry[key]}
+            pastWins={getPastWins(allDays, key, dk)}
+            dailySuggestions={getDailySuggestions(key, dk)}
+            onConfirm={(text, reflection) => onConfirm(key, text, reflection)}
+          />
+        ))}
+      </div>
     </div>
   )
 }
@@ -402,7 +390,7 @@ function LegendItem({ state, label }: { state: DayState; label: string }) {
       ) : (
         <div className={`w-3 h-3 rounded-full shrink-0 ${dotClass}`} />
       )}
-      <span className="font-sans text-xs text-charcoal/40">{label}</span>
+      <span className="font-sans text-xs lg:text-sm text-charcoal/40">{label}</span>
     </div>
   )
 }

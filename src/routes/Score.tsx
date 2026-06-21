@@ -14,6 +14,7 @@
  */
 
 import { useApp } from '../context/AppContext'
+import { dateSeed } from '../data/suggestions'
 import type { CategoryKey } from '../types'
 
 const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
@@ -99,20 +100,56 @@ function getWeekStats(
   return stats
 }
 
+// ── Daily quote bank ──────────────────────────────────────────────────────────
+
+const QUOTE_BANK = [
+  'Discipline is choosing between what you want now and what you want most.',
+  'You do not have to see the whole staircase, just take the first step.',
+  'Small disciplines repeated with consistency lead to great achievements.',
+  'What you do today is what matters most.',
+  'The pain of discipline weighs ounces; the pain of regret weighs tons.',
+  'We are what we repeatedly do.',
+  'A river cuts through rock not because of its power, but its persistence.',
+  'Showing up is half the battle, and it is the half most people skip.',
+  'Motivation gets you started. Habit keeps you going.',
+  'You will never change your life until you change something you do daily.',
+  'The secret of your future is hidden in your daily routine.',
+  'Every action you take is a vote for the type of person you wish to become.',
+  'Patience is not passive waiting. It is active showing up, again and again.',
+  'Slow progress is still progress.',
+  'It is not the load that breaks you down, it is how you carry it.',
+  'The body achieves what the mind believes.',
+  'Stillness is where clarity is born.',
+  'You cannot pour from an empty cup. Fill your own first.',
+  'Growth is uncomfortable because you have never been here before.',
+  'Be patient with yourself. Self-growth is tender; it is holy ground.',
+  'What feels like a setback is often a setup for what comes next.',
+  'Healing is not linear, and neither is becoming.',
+  'You are not behind. You are exactly where you need to be to learn this.',
+  'Rest is productive. A field left fallow returns richer.',
+  'The quiet days count just as much as the loud ones.',
+]
+
+function getDailyQuote(dateStr: string): string {
+  return QUOTE_BANK[dateSeed(dateStr) % QUOTE_BANK.length]
+}
+
 // ── Letter generator ──────────────────────────────────────────────────────────
 
 function generateLetter(
   stats: WeekStats,
   labels: Record<CategoryKey, { label: string; definition: string }>,
   _weekDays: Date[],
-  name: string
+  name: string,
+  todayStr: string
 ): string {
   const { logged, reflections, aligned, elapsed } = stats
   const remaining = 7 - elapsed
   const greeting = name ? `Dear ${name},` : `Dear you,`
+  const quote = getDailyQuote(todayStr)
 
   if (elapsed === 0) {
-    return `${greeting}\n\nA new week. The same invitation — three parts of you, one day at a time.\n\nYou don't have to be perfect. You just have to begin.\n\nStill with you.\n\nTriova`
+    return `${greeting}\n\nA new week. The same invitation — three parts of you, one day at a time.\n\nYou don't have to be perfect. You just have to begin.\n\n"${quote}"\n\nStill with you.\n\nTriova`
   }
 
   const strongest = CATEGORIES.reduce((a, b) => logged[a] >= logged[b] ? a : b)
@@ -169,6 +206,8 @@ function generateLetter(
     lines.push(`The week is done. It belongs to you now — all of it.`)
   }
 
+  lines.push(``)
+  lines.push(`"${quote}"`)
   lines.push(``)
   lines.push(`Still with you.`)
   lines.push(``)
@@ -339,41 +378,44 @@ export default function Pulse() {
   const stats       = getWeekStats(data.days, currentWeek)
   const categories  = data.onboarding.categories
   const name        = data.onboarding.name ?? ''
-  const letter      = generateLetter(stats, categories, currentWeek, name)
+  const todayStr    = dateKey(new Date())
+  const letter      = generateLetter(stats, categories, currentWeek, name, todayStr)
 
   return (
-    <div className="min-h-screen bg-beige max-w-md lg:max-w-4xl mx-auto px-6 pt-12 pb-28 flex flex-col gap-8">
+    <div className="min-h-screen bg-beige max-w-md lg:max-w-6xl mx-auto px-6 lg:px-10 pt-12 lg:pt-16 pb-28 flex flex-col gap-8 lg:gap-10">
       <div className="flex flex-col gap-1">
-        <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Triova</p>
-        <h1 className="font-serif text-2xl lg:text-3xl text-charcoal">Your pulse</h1>
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/40">Triova</p>
+        <h1 className="font-serif text-2xl lg:text-4xl text-charcoal">Your pulse</h1>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-10">
+      <div className="flex flex-col lg:flex-row gap-10 lg:gap-16">
         {/* Wave */}
-        <div className="flex flex-col gap-3 lg:w-[360px] lg:shrink-0">
+        <div className="flex flex-col gap-3 lg:gap-4 lg:w-[440px] lg:shrink-0">
           <PulseWaveSVG weeks={weeks} dayData={data.days} />
           <DayLabels week={currentWeek} />
         </div>
 
         {/* Weekly letter */}
-        <div className="border-t lg:border-t-0 border-charcoal/10 pt-6 lg:pt-0 flex flex-col gap-1 flex-1">
-          <p className="font-sans text-xs uppercase tracking-widest text-charcoal/30 mb-3">
+        <div className="border-t lg:border-t-0 border-charcoal/10 pt-6 lg:pt-0 flex flex-col gap-1 flex-1 lg:max-w-xl">
+          <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/30 mb-3">
             This week
           </p>
           {letter.split('\n').map((line, i) =>
             line === '' ? (
-              <div key={i} className="h-2" />
+              <div key={i} className="h-2 lg:h-3" />
             ) : (
               <p
                 key={i}
                 className={`font-serif leading-relaxed ${
                   line.startsWith('Dear')
-                    ? 'text-charcoal text-lg'
+                    ? 'text-charcoal text-lg lg:text-2xl'
                     : line === 'Triova'
-                    ? 'text-charcoal/50 text-base italic'
+                    ? 'text-charcoal/50 text-base lg:text-lg italic'
                     : line === 'Still with you.'
-                    ? 'text-charcoal/40 text-sm'
-                    : 'text-charcoal/70 text-sm'
+                    ? 'text-charcoal/40 text-sm lg:text-base'
+                    : line.startsWith('"')
+                    ? 'text-charcoal/55 text-sm lg:text-base italic'
+                    : 'text-charcoal/70 text-sm lg:text-base'
                 }`}
               >
                 {line}

@@ -41,20 +41,20 @@ export default function NavBar() {
   if (pathname === '/onboarding' || pathname === '/settings') return null
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-beige border-t border-charcoal/8 max-w-md mx-auto lg:max-w-xs lg:bottom-6 lg:rounded-2xl lg:border lg:shadow-lg">
-      <div className="flex justify-around items-center py-3 px-6">
+    <nav className="fixed bottom-0 left-0 right-0 bg-beige border-t border-charcoal/8 max-w-md mx-auto lg:max-w-sm lg:bottom-8 lg:rounded-2xl lg:border lg:shadow-lg">
+      <div className="flex justify-around items-center py-3 lg:py-4 px-6 lg:px-8">
         {LINKS.map(({ to, label, icon }) => {
           const active = pathname === to
           return (
             <NavLink
               key={to}
               to={to}
-              className={`flex flex-col items-center gap-1 transition-colors ${
+              className={`flex flex-col items-center gap-1 lg:gap-1.5 transition-colors ${
                 active ? 'text-charcoal' : 'text-charcoal/30'
               }`}
             >
-              {icon(active)}
-              <span className="font-sans text-xs">{label}</span>
+              <span className="lg:scale-125">{icon(active)}</span>
+              <span className="font-sans text-xs lg:text-sm">{label}</span>
             </NavLink>
           )
         })}
