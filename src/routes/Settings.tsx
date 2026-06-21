@@ -28,7 +28,7 @@ const ACCENT_BORDER: Record<CategoryKey, string> = {
 }
 
 export default function Settings() {
-  const { data, updateSettings, resetPractice, restoreData } = useApp()
+  const { data, updateSettings, resetPractice, restoreData, signOut } = useApp()
   const navigate = useNavigate()
 
   const [name, setName] = useState(data.onboarding.name)
@@ -205,6 +205,16 @@ export default function Settings() {
             </div>
           </div>
         )}
+      </section>
+
+      {/* Sign out */}
+      <section className="flex flex-col gap-3 border-t border-charcoal/10 pt-6">
+        <button
+          onClick={signOut}
+          className="w-full py-3 lg:py-3.5 rounded-xl border border-charcoal/15 font-sans text-sm lg:text-base text-charcoal/40 bg-transparent hover:border-charcoal/30 transition-colors"
+        >
+          Sign out
+        </button>
       </section>
 
     </div>

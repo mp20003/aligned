@@ -5,11 +5,20 @@ import Today from './routes/Today'
 import Score from './routes/Score'
 import History from './routes/History'
 import Settings from './routes/Settings'
+import Login from './routes/Login'
 import NavBar from './components/NavBar'
 
 function AppRoutes() {
-  const { data } = useApp()
+  const { data, session, authLoading } = useApp()
   const onboarded = data.onboarding.completed
+
+  if (authLoading) {
+    return <div className="min-h-screen bg-beige" />
+  }
+
+  if (!session) {
+    return <Login />
+  }
 
   return (
     <>
