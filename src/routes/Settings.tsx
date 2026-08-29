@@ -1,14 +1,8 @@
 /**
  * Settings
  *
- * Allows the user to update their name, redefine category labels and
- * definitions, export their data as JSON, import a previously exported
- * backup, and reset their practice (clears all logged days, keeps
- * onboarding config).
- *
- * Never shown during onboarding. Accessible via gear icon on Today screen.
- *
- * Props: none. Reads/writes via AppContext, navigates via React Router.
+ * Name, category labels/definitions, export/import, reset, sign out.
+ * Never shown during onboarding.
  */
 
 import { useState, useRef } from 'react'
@@ -20,11 +14,6 @@ const ACCENT_TEXT: Record<CategoryKey, string> = {
   physical: 'text-physical',
   mental: 'text-mental',
   spiritual: 'text-spiritual',
-}
-const ACCENT_BORDER: Record<CategoryKey, string> = {
-  physical: 'border-physical',
-  mental: 'border-mental',
-  spiritual: 'border-spiritual',
 }
 
 export default function Settings() {
@@ -70,7 +59,7 @@ export default function Settings() {
         restoreData(imported)
         navigate('/today')
       } catch {
-        alert('That file doesn\'t look like a Triova backup.')
+        alert("That file doesn't look like a Triova backup.")
       }
     }
     reader.readAsText(file)
@@ -84,18 +73,20 @@ export default function Settings() {
 
   const dayCount = Object.keys(data.days).length
 
-  return (
-    <div className="min-h-screen bg-beige max-w-md lg:max-w-2xl mx-auto px-6 lg:px-10 pt-12 lg:pt-16 pb-28 flex flex-col gap-8 lg:gap-10">
+  const divider = { borderTop: '1px solid rgba(255,255,255,0.08)' }
+  const surfaceBtn = { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }
 
-      {/* Header */}
+  return (
+    <div className="min-h-screen max-w-md lg:max-w-2xl mx-auto px-6 lg:px-10 pt-12 lg:pt-16 pb-28 flex flex-col gap-8 lg:gap-10">
+
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-1">
-          <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/40">Triova</p>
-          <h1 className="font-serif text-2xl lg:text-4xl text-charcoal">Settings</h1>
+          <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Triova</p>
+          <h1 className="font-serif text-2xl lg:text-4xl text-white">Settings</h1>
         </div>
         <button
           onClick={() => navigate(-1)}
-          className="font-sans text-xs lg:text-sm text-charcoal/40 underline underline-offset-4"
+          className="font-sans text-xs lg:text-sm text-white/30 underline underline-offset-4 hover:text-white/55 transition-colors"
         >
           Done
         </button>
@@ -103,96 +94,97 @@ export default function Settings() {
 
       {/* Name */}
       <section className="flex flex-col gap-3">
-        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/40">Your name</p>
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Your name</p>
         <input
           type="text"
           value={name}
           onChange={e => { setName(e.target.value); setSaved(false) }}
-          className="w-full bg-transparent border-b border-charcoal/20 py-2 font-serif text-lg lg:text-xl text-charcoal placeholder:text-charcoal/25 focus:outline-none focus:border-charcoal/50"
+          className="w-full bg-transparent py-2 font-serif text-lg lg:text-xl text-white/90 focus:outline-none"
+          style={{ borderBottom: '1px solid rgba(255,255,255,0.15)' }}
         />
       </section>
 
       {/* Categories */}
       <section className="flex flex-col gap-5 lg:gap-6">
-        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/40">Your categories</p>
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Your categories</p>
         {(['physical', 'mental', 'spiritual'] as CategoryKey[]).map(key => (
           <div key={key} className="flex flex-col gap-2">
             <input
               type="text"
               value={categories[key].label}
               onChange={e => updateCategory(key, 'label', e.target.value)}
-              className={`bg-transparent border-b py-1.5 font-sans text-sm lg:text-base font-medium focus:outline-none ${ACCENT_TEXT[key]} ${ACCENT_BORDER[key]} border-opacity-40`}
+              className={`bg-transparent py-1.5 font-sans text-sm lg:text-base font-medium focus:outline-none ${ACCENT_TEXT[key]}`}
+              style={{ borderBottom: '1px solid rgba(255,255,255,0.12)' }}
             />
             <textarea
               value={categories[key].definition}
               onChange={e => updateCategory(key, 'definition', e.target.value)}
               rows={2}
-              className="w-full bg-white/40 rounded-xl px-3 py-2 font-sans text-sm lg:text-base text-charcoal/70 placeholder:text-charcoal/25 focus:outline-none resize-none leading-relaxed border border-charcoal/10 focus:border-charcoal/25"
+              className="w-full rounded-xl px-3 py-2 font-sans text-sm lg:text-base text-white/55 focus:outline-none resize-none leading-relaxed"
+              style={surfaceBtn}
             />
           </div>
         ))}
       </section>
 
-      {/* Save button */}
       <button
         onClick={handleSave}
-        className={`w-full py-3.5 lg:py-4 rounded-2xl font-sans text-sm lg:text-base tracking-wide transition-all duration-200 ${
-          saved ? 'bg-physical text-white' : 'bg-charcoal text-beige'
+        className={`w-full py-3.5 lg:py-4 rounded-2xl font-sans text-sm lg:text-base tracking-wide transition-all duration-200 btn-lift ${
+          saved ? 'bg-physical text-white' : 'text-white'
         }`}
+        style={saved ? {} : { background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}
       >
         {saved ? 'Saved' : 'Save changes'}
       </button>
 
       {/* Data */}
-      <section className="flex flex-col gap-3 border-t border-charcoal/10 pt-6">
-        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/40">Your data</p>
-        <p className="font-sans text-xs lg:text-sm text-charcoal/40 leading-relaxed">
+      <section className="flex flex-col gap-3 pt-6" style={divider}>
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Your data</p>
+        <p className="font-sans text-xs lg:text-sm text-white/30 leading-relaxed">
           {dayCount === 0
             ? 'No wins logged yet.'
-            : `${dayCount} day${dayCount === 1 ? '' : 's'} logged. Export to keep a backup before switching devices.`}
+            : `${dayCount} day${dayCount === 1 ? '' : 's'} logged. Export to keep a backup.`}
         </p>
         <div className="flex gap-3">
           <button
             onClick={handleExport}
-            className="flex-1 py-3 lg:py-3.5 rounded-xl border border-charcoal/20 font-sans text-sm lg:text-base text-charcoal/70 bg-white/40 hover:bg-white/70 transition-colors"
+            className="flex-1 py-3 lg:py-3.5 rounded-xl font-sans text-sm lg:text-base text-white/55 hover:text-white/80 transition-colors"
+            style={surfaceBtn}
           >
             Export backup
           </button>
           <button
             onClick={() => importRef.current?.click()}
-            className="flex-1 py-3 lg:py-3.5 rounded-xl border border-charcoal/20 font-sans text-sm lg:text-base text-charcoal/70 bg-white/40 hover:bg-white/70 transition-colors"
+            className="flex-1 py-3 lg:py-3.5 rounded-xl font-sans text-sm lg:text-base text-white/55 hover:text-white/80 transition-colors"
+            style={surfaceBtn}
           >
             Import backup
           </button>
-          <input
-            ref={importRef}
-            type="file"
-            accept=".json"
-            className="hidden"
-            onChange={handleImport}
-          />
+          <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
         </div>
       </section>
 
       {/* Reset */}
-      <section className="flex flex-col gap-3 border-t border-charcoal/10 pt-6">
-        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/40">Reset</p>
+      <section className="flex flex-col gap-3 pt-6" style={divider}>
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Reset</p>
         {!confirmReset ? (
           <button
             onClick={() => setConfirmReset(true)}
-            className="w-full py-3 lg:py-3.5 rounded-xl border border-charcoal/15 font-sans text-sm lg:text-base text-charcoal/40 bg-transparent hover:border-charcoal/30 transition-colors"
+            className="w-full py-3 lg:py-3.5 rounded-xl font-sans text-sm lg:text-base text-white/30 hover:text-white/50 transition-colors"
+            style={surfaceBtn}
           >
             Reset practice
           </button>
         ) : (
-          <div className="flex flex-col gap-3 bg-white/50 rounded-2xl px-4 py-4">
-            <p className="font-serif text-sm lg:text-base text-charcoal/70 leading-relaxed">
-              This will delete all {dayCount} logged day{dayCount === 1 ? '' : 's'}. Your name and category definitions are kept. This cannot be undone.
+          <div className="flex flex-col gap-3 rounded-2xl px-4 py-4" style={surfaceBtn}>
+            <p className="font-serif text-sm lg:text-base text-white/55 leading-relaxed">
+              This will delete all {dayCount} logged day{dayCount === 1 ? '' : 's'}. Your name and categories are kept. Cannot be undone.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmReset(false)}
-                className="flex-1 py-2.5 lg:py-3 rounded-xl border border-charcoal/15 font-sans text-sm lg:text-base text-charcoal/50"
+                className="flex-1 py-2.5 lg:py-3 rounded-xl font-sans text-sm lg:text-base text-white/40"
+                style={surfaceBtn}
               >
                 Cancel
               </button>
@@ -208,10 +200,11 @@ export default function Settings() {
       </section>
 
       {/* Sign out */}
-      <section className="flex flex-col gap-3 border-t border-charcoal/10 pt-6">
+      <section className="flex flex-col gap-3 pt-6" style={divider}>
         <button
           onClick={signOut}
-          className="w-full py-3 lg:py-3.5 rounded-xl border border-charcoal/15 font-sans text-sm lg:text-base text-charcoal/40 bg-transparent hover:border-charcoal/30 transition-colors"
+          className="w-full py-3 lg:py-3.5 rounded-xl font-sans text-sm lg:text-base text-white/30 hover:text-white/50 transition-colors"
+          style={surfaceBtn}
         >
           Sign out
         </button>

@@ -4,8 +4,8 @@ export default {
   theme: {
     extend: {
       colors: {
-        beige:    '#F5F0E8',
-        charcoal: '#2C2C2A',
+        beige:    '#0f0f1a',
+        charcoal: 'rgba(255,255,255,0.90)',
         physical: '#1D9E75',
         mental:   '#7F77DD',
         spiritual:'#D85A30',

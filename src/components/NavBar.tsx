@@ -41,7 +41,15 @@ export default function NavBar() {
   if (pathname === '/onboarding' || pathname === '/settings') return null
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-beige border-t border-charcoal/8 max-w-md mx-auto lg:max-w-sm lg:bottom-8 lg:rounded-2xl lg:border lg:shadow-lg">
+    <nav
+      className="fixed bottom-0 left-0 right-0 max-w-md mx-auto lg:max-w-sm lg:bottom-8 lg:rounded-2xl border-t lg:border"
+      style={{
+        background: 'rgba(15,15,26,0.85)',
+        borderColor: 'rgba(255,255,255,0.08)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+      }}
+    >
       <div className="flex justify-around items-center py-3 lg:py-4 px-6 lg:px-8">
         {LINKS.map(({ to, label, icon }) => {
           const active = pathname === to
@@ -50,7 +58,7 @@ export default function NavBar() {
               key={to}
               to={to}
               className={`flex flex-col items-center gap-1 lg:gap-1.5 transition-all duration-150 hover:scale-110 active:scale-95 ${
-                active ? 'text-charcoal' : 'text-charcoal/30 hover:text-charcoal/60'
+                active ? 'text-white' : 'text-white/25 hover:text-white/55'
               }`}
             >
               <span className="lg:scale-125">{icon(active)}</span>

@@ -8,8 +8,7 @@
  *
  * Used on Today (for the current day) and History (for any past day).
  *
- * Props: categoryKey, label, existing win, pastWins, dailySuggestions,
- * onConfirm callback.
+ * Never shows streaks or counts. Never forces all three wins.
  */
 
 import { useState } from 'react'
@@ -37,6 +36,7 @@ export default function WinCard({ categoryKey, label, existing, pastWins, dailyS
   const [value, setValue] = useState(existing?.text ?? '')
   const [reflecting, setReflecting] = useState(false)
   const [skipped, setSkipped] = useState(false)
+  const [confirmFlash, setConfirmFlash] = useState(false)
   const accent = ACCENT[categoryKey]
 
   function handleDone() {
@@ -44,21 +44,22 @@ export default function WinCard({ categoryKey, label, existing, pastWins, dailyS
   }
 
   function handleReflection(word: string) {
+    setConfirmFlash(true)
+    setTimeout(() => setConfirmFlash(false), 500)
     onConfirm(value.trim(), word)
     setReflecting(false)
     setEditing(false)
   }
 
-  // Skipped state — deliberately no win for this category
   if (skipped && !existing) {
     return (
-      <div className="rounded-2xl border border-charcoal/10 bg-white/20 px-5 lg:px-6 py-4 lg:py-5 flex items-center justify-between">
+      <div className="surface rounded-2xl px-5 lg:px-6 py-4 lg:py-5 flex items-center justify-between transition-all duration-200">
         <span className={`font-sans text-xs lg:text-sm uppercase tracking-widest ${accent.text} opacity-50`}>{label}</span>
         <div className="flex items-center gap-3">
-          <span className="font-serif text-sm lg:text-base text-charcoal/30 italic">No win today</span>
+          <span className="font-serif text-sm lg:text-base text-white/25 italic">No win today</span>
           <button
             onClick={() => setSkipped(false)}
-            className="font-sans text-xs lg:text-sm text-charcoal/30 underline underline-offset-2"
+            className="font-sans text-xs lg:text-sm text-white/30 underline underline-offset-2 hover:text-white/50 transition-colors"
           >
             Add one
           </button>
@@ -67,41 +68,41 @@ export default function WinCard({ categoryKey, label, existing, pastWins, dailyS
     )
   }
 
-  // Confirmed state
   if (existing && !editing) {
     return (
-      <div className={`rounded-2xl border ${accent.border} border-opacity-30 bg-white/40 px-5 lg:px-6 py-4 lg:py-5 flex flex-col gap-1`}>
+      <div className={`rounded-2xl border px-5 lg:px-6 py-4 lg:py-5 flex flex-col gap-1 transition-all duration-300 ${confirmFlash ? 'confirm-ring' : ''}`}
+        style={{ borderColor: `${accent.border.replace('border-', '')}40`, background: 'rgba(255,255,255,0.06)' }}>
         <div className="flex items-center justify-between">
           <span className={`font-sans text-xs lg:text-sm uppercase tracking-widest ${accent.text}`}>{label}</span>
           <button
             onClick={() => { setValue(existing.text); setEditing(true); setReflecting(false) }}
-            className="font-sans text-xs lg:text-sm text-charcoal/30 underline underline-offset-2"
+            className="font-sans text-xs lg:text-sm text-white/25 underline underline-offset-2 hover:text-white/50 transition-colors"
           >
             Edit
           </button>
         </div>
-        <p className="font-serif text-base lg:text-lg text-charcoal leading-snug">{existing.text}</p>
+        <p className="font-serif text-base lg:text-lg text-white/90 leading-snug">{existing.text}</p>
         {existing.reflection && (
-          <p className="font-sans text-xs lg:text-sm text-charcoal/30 mt-0.5">{existing.reflection}</p>
+          <p className="font-sans text-xs lg:text-sm text-white/25 mt-0.5">{existing.reflection}</p>
         )}
       </div>
     )
   }
 
-  // Reflection state
   if (reflecting) {
     return (
-      <div className="rounded-2xl bg-white/40 px-5 lg:px-6 py-4 lg:py-5 flex flex-col gap-4 shadow-sm">
+      <div className="surface rounded-2xl px-5 lg:px-6 py-4 lg:py-5 flex flex-col gap-4">
         <span className={`font-sans text-xs lg:text-sm uppercase tracking-widest ${accent.text}`}>{label}</span>
-        <p className="font-serif text-sm lg:text-base text-charcoal/70 leading-snug">"{value}"</p>
+        <p className="font-serif text-sm lg:text-base text-white/50 leading-snug">"{value}"</p>
         <div className="flex flex-col gap-2">
-          <p className="font-sans text-xs lg:text-sm text-charcoal/40 uppercase tracking-widest">How did it feel?</p>
+          <p className="font-sans text-xs lg:text-sm text-white/25 uppercase tracking-widest">How did it feel?</p>
           <div className="grid grid-cols-2 gap-2">
             {REFLECTION_WORDS.map(word => (
               <button
                 key={word}
                 onClick={() => handleReflection(word)}
-                className="py-2.5 lg:py-3 rounded-xl border border-charcoal/15 font-sans text-sm lg:text-base text-charcoal/70 bg-white/50 hover:bg-white/90 hover:border-charcoal/25 hover:text-charcoal transition-all duration-150 btn-lift"
+                className="py-2.5 lg:py-3 rounded-xl font-sans text-sm lg:text-base text-white/70 transition-all duration-150 btn-lift hover:text-white"
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
               >
                 {word}
               </button>
@@ -112,9 +113,8 @@ export default function WinCard({ categoryKey, label, existing, pastWins, dailyS
     )
   }
 
-  // Input state
   return (
-    <div className="rounded-2xl bg-white/40 px-5 lg:px-6 py-4 lg:py-5 flex flex-col gap-3 shadow-sm">
+    <div className="surface rounded-2xl px-5 lg:px-6 py-4 lg:py-5 flex flex-col gap-3">
       <span className={`font-sans text-xs lg:text-sm uppercase tracking-widest ${accent.text}`}>{label}</span>
 
       {/* Daily suggestions */}
@@ -123,11 +123,12 @@ export default function WinCard({ categoryKey, label, existing, pastWins, dailyS
           <button
             key={s}
             onClick={() => setValue(s)}
-            className={`px-3 py-1.5 rounded-full font-sans text-xs lg:text-sm border transition-all duration-150 chip-press ${
+            className={`px-3 py-1.5 rounded-full font-sans text-xs lg:text-sm transition-all duration-150 chip-press ${
               value === s
                 ? `${accent.bg} text-white border-transparent shadow-sm`
-                : 'border-charcoal/15 text-charcoal/60 bg-white/50 hover:bg-white/80 hover:border-charcoal/25'
+                : 'text-white/50 hover:text-white/80'
             }`}
+            style={value === s ? {} : { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
           >
             {s}
           </button>
@@ -137,17 +138,18 @@ export default function WinCard({ categoryKey, label, existing, pastWins, dailyS
       {/* Past wins */}
       {pastWins.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <p className="font-sans text-xs lg:text-sm text-charcoal/30 uppercase tracking-widest">Previously</p>
+          <p className="font-sans text-xs lg:text-sm text-white/20 uppercase tracking-widest">Previously</p>
           <div className="flex flex-wrap gap-2">
             {pastWins.map(w => (
               <button
                 key={w}
                 onClick={() => setValue(w)}
-                className={`px-3 py-1.5 rounded-full font-sans text-xs lg:text-sm border transition-all duration-150 chip-press ${
+                className={`px-3 py-1.5 rounded-full font-sans text-xs lg:text-sm transition-all duration-150 chip-press ${
                   value === w
                     ? `${accent.bg} text-white border-transparent shadow-sm`
-                    : 'border-charcoal/15 text-charcoal/50 bg-white/30 hover:bg-white/60 hover:border-charcoal/25'
+                    : 'text-white/40 hover:text-white/70'
                 }`}
+                style={value === w ? {} : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
               >
                 {w}
               </button>
@@ -163,14 +165,15 @@ export default function WinCard({ categoryKey, label, existing, pastWins, dailyS
         placeholder="Or write your own…"
         rows={2}
         maxLength={160}
-        className="w-full bg-transparent font-serif text-base lg:text-lg text-charcoal placeholder:text-charcoal/25 focus:outline-none resize-none leading-snug border-t border-charcoal/10 pt-3"
+        className="w-full bg-transparent font-serif text-base lg:text-lg text-white/90 focus:outline-none resize-none leading-snug pt-3"
+        style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
       />
 
       <div className="flex justify-end items-center gap-4">
         {!value.trim() && (
           <button
             onClick={() => setSkipped(true)}
-            className="font-sans text-xs lg:text-sm text-charcoal/30 underline underline-offset-2"
+            className="font-sans text-xs lg:text-sm text-white/25 underline underline-offset-2 hover:text-white/45 transition-colors"
           >
             No win today
           </button>
@@ -181,8 +184,9 @@ export default function WinCard({ categoryKey, label, existing, pastWins, dailyS
           className={`px-5 lg:px-6 py-1.5 lg:py-2 rounded-full font-sans text-xs lg:text-sm transition-all duration-150 ${
             value.trim()
               ? `${accent.bg} text-white btn-lift`
-              : 'bg-charcoal/10 text-charcoal/30 cursor-not-allowed'
+              : 'text-white/20 cursor-not-allowed'
           }`}
+          style={value.trim() ? {} : { background: 'rgba(255,255,255,0.06)' }}
         >
           Done
         </button>

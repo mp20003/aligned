@@ -1,12 +1,7 @@
 /**
  * Login
  *
- * Passwordless magic-link sign-in. User enters their email, gets a link,
- * clicking it signs them in and Supabase redirects back here with a
- * session. Never collects a password. Shown whenever there is no active
- * session, in place of every other route.
- *
- * Props: none. Talks to Supabase auth directly.
+ * Google OAuth sign-in. Shown whenever there is no active session.
  */
 
 import { useState } from 'react'
@@ -30,11 +25,20 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-beige flex items-center justify-center px-6">
-      <div className="w-full max-w-sm lg:max-w-md flex flex-col gap-6 lg:gap-8">
-        <div className="flex flex-col gap-2 text-center">
-          <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/40">Triova</p>
-          <h1 className="font-serif text-3xl lg:text-4xl text-charcoal">Welcome back</h1>
+    <div className="min-h-screen flex items-center justify-center px-6" style={{ background: '#0f0f1a' }}>
+      <div className="w-full max-w-sm lg:max-w-md flex flex-col gap-8 lg:gap-10">
+
+        {/* Triova mark */}
+        <div className="flex flex-col items-center gap-4">
+          <svg width="36" height="36" viewBox="0 0 22 22" fill="none" strokeLinecap="round">
+            <path d="M 11,2 A 9,9 0 0,1 18.79,15.5" stroke="#1D9E75" strokeWidth="2" />
+            <path d="M 18.79,15.5 A 9,9 0 0,1 3.21,15.5" stroke="#7F77DD" strokeWidth="2" />
+            <path d="M 3.21,15.5 A 9,9 0 0,1 11,2" stroke="#D85A30" strokeWidth="2" />
+          </svg>
+          <div className="flex flex-col gap-1 text-center">
+            <p className="font-sans text-xs uppercase tracking-widest text-white/30">Triova</p>
+            <h1 className="font-serif text-3xl lg:text-4xl text-white">Welcome back</h1>
+          </div>
         </div>
 
         <div className="flex flex-col gap-4">
@@ -42,7 +46,8 @@ export default function Login() {
           <button
             onClick={handleGoogle}
             disabled={loading}
-            className="w-full py-3.5 lg:py-4 rounded-2xl bg-white border border-charcoal/15 font-sans text-sm lg:text-base text-charcoal/80 tracking-wide flex items-center justify-center gap-3 hover:bg-white/80 transition-colors disabled:opacity-50"
+            className="w-full py-3.5 lg:py-4 rounded-2xl font-sans text-sm lg:text-base text-white/80 tracking-wide flex items-center justify-center gap-3 transition-all duration-150 btn-lift disabled:opacity-50"
+            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}
           >
             <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
               <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
@@ -52,7 +57,7 @@ export default function Login() {
             </svg>
             {loading ? 'Redirecting…' : 'Sign in with Google'}
           </button>
-          <p className="font-sans text-xs text-charcoal/40 text-center leading-relaxed">
+          <p className="font-sans text-xs text-white/20 text-center leading-relaxed">
             Your data is private and only visible to you.
           </p>
         </div>
