@@ -101,7 +101,7 @@ export default function WinCard({ categoryKey, label, existing, pastWins, dailyS
               <button
                 key={word}
                 onClick={() => handleReflection(word)}
-                className="py-2.5 lg:py-3 rounded-xl border border-charcoal/15 font-sans text-sm lg:text-base text-charcoal/70 bg-white/50 hover:bg-white/80 transition-colors"
+                className="py-2.5 lg:py-3 rounded-xl border border-charcoal/15 font-sans text-sm lg:text-base text-charcoal/70 bg-white/50 hover:bg-white/90 hover:border-charcoal/25 hover:text-charcoal transition-all duration-150 btn-lift"
               >
                 {word}
               </button>
@@ -123,10 +123,10 @@ export default function WinCard({ categoryKey, label, existing, pastWins, dailyS
           <button
             key={s}
             onClick={() => setValue(s)}
-            className={`px-3 py-1.5 rounded-full font-sans text-xs lg:text-sm border transition-colors ${
+            className={`px-3 py-1.5 rounded-full font-sans text-xs lg:text-sm border transition-all duration-150 chip-press ${
               value === s
-                ? `${accent.bg} text-white border-transparent`
-                : 'border-charcoal/15 text-charcoal/60 bg-white/50'
+                ? `${accent.bg} text-white border-transparent shadow-sm`
+                : 'border-charcoal/15 text-charcoal/60 bg-white/50 hover:bg-white/80 hover:border-charcoal/25'
             }`}
           >
             {s}
@@ -143,10 +143,10 @@ export default function WinCard({ categoryKey, label, existing, pastWins, dailyS
               <button
                 key={w}
                 onClick={() => setValue(w)}
-                className={`px-3 py-1.5 rounded-full font-sans text-xs lg:text-sm border transition-colors ${
+                className={`px-3 py-1.5 rounded-full font-sans text-xs lg:text-sm border transition-all duration-150 chip-press ${
                   value === w
-                    ? `${accent.bg} text-white border-transparent`
-                    : 'border-charcoal/15 text-charcoal/50 bg-white/30'
+                    ? `${accent.bg} text-white border-transparent shadow-sm`
+                    : 'border-charcoal/15 text-charcoal/50 bg-white/30 hover:bg-white/60 hover:border-charcoal/25'
                 }`}
               >
                 {w}
@@ -178,9 +178,9 @@ export default function WinCard({ categoryKey, label, existing, pastWins, dailyS
         <button
           onClick={handleDone}
           disabled={!value.trim()}
-          className={`px-5 lg:px-6 py-1.5 lg:py-2 rounded-full font-sans text-xs lg:text-sm transition-all duration-200 ${
+          className={`px-5 lg:px-6 py-1.5 lg:py-2 rounded-full font-sans text-xs lg:text-sm transition-all duration-150 ${
             value.trim()
-              ? `${accent.bg} text-white`
+              ? `${accent.bg} text-white btn-lift`
               : 'bg-charcoal/10 text-charcoal/30 cursor-not-allowed'
           }`}
         >

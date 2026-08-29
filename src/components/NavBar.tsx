@@ -49,8 +49,8 @@ export default function NavBar() {
             <NavLink
               key={to}
               to={to}
-              className={`flex flex-col items-center gap-1 lg:gap-1.5 transition-colors ${
-                active ? 'text-charcoal' : 'text-charcoal/30'
+              className={`flex flex-col items-center gap-1 lg:gap-1.5 transition-all duration-150 hover:scale-110 active:scale-95 ${
+                active ? 'text-charcoal' : 'text-charcoal/30 hover:text-charcoal/60'
               }`}
             >
               <span className="lg:scale-125">{icon(active)}</span>

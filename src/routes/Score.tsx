@@ -1,12 +1,10 @@
 /**
- * Pulse — Wave
+ * Pulse
  *
- * Your practice rendered as a pulse signal. Each day creates a peak on the
- * waveform — tall for full alignment, smaller for partial, flat for missed.
- * The current week's trace sits at the front, vivid and full-sized. Past
- * weeks recede behind it as quieter, smaller traces.
- *
- * Below the wave: the personal weekly letter from Pulse.
+ * Your practice rendered as a live ECG heartbeat — beating continuously,
+ * shaped by your actual data. Strong beats = aligned days, weaker = partial,
+ * near-flat = missed. Below: three vital stat readouts (one per category)
+ * showing this week's count, plus a single sharp insight sentence.
  *
  * Never shows streaks, scores, or percentages.
  *
@@ -14,24 +12,23 @@
  */
 
 import { useApp } from '../context/AppContext'
-import { dateSeed } from '../data/suggestions'
 import type { CategoryKey } from '../types'
 
 const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
 const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
-const SVG_W = 320
-const SVG_H = 246
+const ACCENT_TEXT: Record<CategoryKey, string> = {
+  physical: 'text-physical',
+  mental: 'text-mental',
+  spiritual: 'text-spiritual',
+}
+const ACCENT_BG: Record<CategoryKey, string> = {
+  physical: 'bg-physical',
+  mental: 'bg-mental',
+  spiritual: 'bg-spiritual',
+}
 
-// All rows use the same peak height — differentiated by opacity/weight only.
-// This means a 3-win day looks identical regardless of which week it's in.
-// Baselines are evenly spaced with 46px between them.
-const W_BASELINE = [52,  98, 144, 190, 236]
-const W_MAX_H    = [32,  32,  32,  32,  32]
-const W_STROKE   = [0.7, 0.9, 1.1, 1.5, 2.0]
-const W_OPACITY  = [0.10, 0.20, 0.35, 0.58, 1.0]
-
-// ── Date helpers ──────────────────────────────────────────────────────────────
+// ── Date helpers ───────────────────────────────────────────────────────────────
 
 function dateKey(d: Date) {
   return d.toISOString().split('T')[0]
@@ -43,185 +40,44 @@ function isFuture(d: Date): boolean {
   return d > today
 }
 
-function getLastNWeeks(n: number): Date[][] {
+function getCurrentWeek(): Date[] {
   const today = new Date()
-  const dow = (today.getDay() + 6) % 7  // days since Monday
-
-  const weeks: Date[][] = []
-  for (let w = n - 1; w >= 0; w--) {
-    weeks.push(
-      Array.from({ length: 7 }, (_, d) => {
-        const date = new Date(today)
-        date.setDate(today.getDate() - dow - w * 7 + d)
-        return date
-      })
-    )
-  }
-  return weeks
+  const dow = (today.getDay() + 6) % 7
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today)
+    d.setDate(today.getDate() - dow + i)
+    return d
+  })
 }
 
-
-// ── Stats ─────────────────────────────────────────────────────────────────────
-
-type WeekStats = {
-  logged: Record<CategoryKey, number>
-  reflections: Record<CategoryKey, string[]>
-  aligned: number
-  elapsed: number
+function getLast30Days(): Date[] {
+  return Array.from({ length: 30 }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - 29 + i)
+    return d
+  })
 }
 
-function getWeekStats(
-  days: Record<string, { physical: { text: string; reflection?: string } | null; mental: { text: string; reflection?: string } | null; spiritual: { text: string; reflection?: string } | null }>,
-  weekDays: Date[]
-): WeekStats {
-  const stats: WeekStats = {
-    logged: { physical: 0, mental: 0, spiritual: 0 },
-    reflections: { physical: [], mental: [], spiritual: [] },
-    aligned: 0,
-    elapsed: 0,
-  }
-  for (const d of weekDays) {
+// ── Stats ──────────────────────────────────────────────────────────────────────
+
+function getWeekCounts(
+  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown }>,
+  week: Date[]
+): Record<CategoryKey, number> {
+  const counts: Record<CategoryKey, number> = { physical: 0, mental: 0, spiritual: 0 }
+  for (const d of week) {
     if (isFuture(d)) continue
-    stats.elapsed++
     const entry = days[dateKey(d)]
     if (!entry) continue
-    let allDone = true
-    for (const k of CATEGORIES) {
-      if (entry[k] !== null) {
-        stats.logged[k]++
-        const r = entry[k]?.reflection
-        if (r) stats.reflections[k].push(r)
-      } else {
-        allDone = false
-      }
-    }
-    if (allDone) stats.aligned++
+    CATEGORIES.forEach(k => { if (entry[k] !== null) counts[k]++ })
   }
-  return stats
+  return counts
 }
 
-// ── Daily quote bank ──────────────────────────────────────────────────────────
-
-const QUOTE_BANK = [
-  'Discipline is choosing between what you want now and what you want most.',
-  'You do not have to see the whole staircase, just take the first step.',
-  'Small disciplines repeated with consistency lead to great achievements.',
-  'What you do today is what matters most.',
-  'The pain of discipline weighs ounces; the pain of regret weighs tons.',
-  'We are what we repeatedly do.',
-  'A river cuts through rock not because of its power, but its persistence.',
-  'Showing up is half the battle, and it is the half most people skip.',
-  'Motivation gets you started. Habit keeps you going.',
-  'You will never change your life until you change something you do daily.',
-  'The secret of your future is hidden in your daily routine.',
-  'Every action you take is a vote for the type of person you wish to become.',
-  'Patience is not passive waiting. It is active showing up, again and again.',
-  'Slow progress is still progress.',
-  'It is not the load that breaks you down, it is how you carry it.',
-  'The body achieves what the mind believes.',
-  'Stillness is where clarity is born.',
-  'You cannot pour from an empty cup. Fill your own first.',
-  'Growth is uncomfortable because you have never been here before.',
-  'Be patient with yourself. Self-growth is tender; it is holy ground.',
-  'What feels like a setback is often a setup for what comes next.',
-  'Healing is not linear, and neither is becoming.',
-  'You are not behind. You are exactly where you need to be to learn this.',
-  'Rest is productive. A field left fallow returns richer.',
-  'The quiet days count just as much as the loud ones.',
-]
-
-function getDailyQuote(dateStr: string): string {
-  return QUOTE_BANK[dateSeed(dateStr) % QUOTE_BANK.length]
-}
-
-// ── Letter generator ──────────────────────────────────────────────────────────
-
-function generateLetter(
-  stats: WeekStats,
-  labels: Record<CategoryKey, { label: string; definition: string }>,
-  _weekDays: Date[],
-  name: string,
-  todayStr: string
-): string {
-  const { logged, reflections, aligned, elapsed } = stats
-  const remaining = 7 - elapsed
-  const greeting = name ? `Dear ${name},` : `Dear you,`
-  const quote = getDailyQuote(todayStr)
-
-  if (elapsed === 0) {
-    return `${greeting}\n\nA new week. The same invitation: three parts of you, one day at a time.\n\nYou don't have to be perfect. You just have to begin.\n\n"${quote}"\n\nStill with you.\n\nTriova`
-  }
-
-  const strongest = CATEGORIES.reduce((a, b) => logged[a] >= logged[b] ? a : b)
-  const weakest   = CATEGORIES.reduce((a, b) => logged[a] <= logged[b] ? a : b)
-  const strongestLabel = labels[strongest].label.toLowerCase()
-  const weakestLabel   = labels[weakest].label.toLowerCase()
-  const allReflections = CATEGORIES.flatMap(k => reflections[k])
-  const hardDays       = allReflections.filter(r => r === 'Hard').length
-  const meaningfulDays = allReflections.filter(r => r === 'Meaningful').length
-
-  const lines: string[] = [greeting, ``]
-
-  if (aligned === elapsed && elapsed >= 4) {
-    lines.push(`Every single day this week, you showed up for all three parts of yourself. That's rare. Most people never find that rhythm. You're living it.`)
-  } else if (aligned >= Math.ceil(elapsed * 0.7) && elapsed >= 3) {
-    lines.push(`You've been whole more often than not this week. That consistency is the whole point, not perfection, just presence, most days.`)
-  } else if (elapsed >= 3 && aligned === 0) {
-    lines.push(`This week has been fragmented, pieces here and there, nothing fully complete. That's real life. The week isn't over, and one whole day changes the feeling of all of them.`)
-  } else if (elapsed <= 2) {
-    lines.push(`You're early in the week. What you build from here is still entirely yours to shape.`)
-  } else {
-    lines.push(`Some days whole, some days not. That's the honest shape of a real week, and you kept logging it, which means you kept paying attention.`)
-  }
-
-  lines.push(``)
-
-  if (logged[strongest] === elapsed && elapsed >= 2) {
-    lines.push(`Your ${strongestLabel} practice hasn't wavered. Whatever else fell away this week, that held. That's something to trust in yourself.`)
-  } else if (logged[strongest] >= 3) {
-    lines.push(`Your ${strongestLabel} practice has been your anchor this week, showing up more consistently than anything else.`)
-  }
-
-  if (logged[weakest] === 0 && elapsed >= 3) {
-    lines.push(`Your ${weakestLabel} has gone quiet. Not a failure, but worth sitting with. Sometimes what we avoid is what we most need.`)
-  } else if (logged[weakest] < logged[strongest] - 2 && elapsed >= 4) {
-    lines.push(`Your ${weakestLabel} has been harder to reach this week. Notice that without judgment. Just notice.`)
-  }
-
-  lines.push(``)
-
-  if (hardDays >= 3) {
-    lines.push(`You showed up on hard days. That's not something everyone does. The practice is easiest when life is easy. What you're building is something that holds when it isn't.`)
-  } else if (hardDays >= 1 && meaningfulDays >= 1) {
-    lines.push(`Hard days and meaningful ones, you've had both this week. That range is what a real practice looks like.`)
-  } else if (meaningfulDays >= 3) {
-    lines.push(`So many of your days this week felt meaningful. That's not an accident. That's what showing up for yourself actually does.`)
-  } else if (meaningfulDays >= 1) {
-    lines.push(`At least one day this week felt truly meaningful to you. Let that be the signal, not the exception.`)
-  }
-
-  if (remaining > 0 && remaining <= 3) {
-    lines.push(`${remaining === 1 ? 'One day' : `${remaining} days`} left. The week closes however you choose to close it.`)
-  } else if (remaining === 0) {
-    lines.push(`The week is done. It belongs to you now, all of it.`)
-  }
-
-  lines.push(``)
-  lines.push(`"${quote}"`)
-  lines.push(``)
-  lines.push(`Still with you.`)
-  lines.push(``)
-  lines.push(`Triova`)
-
-  return lines.join('\n')
-}
-
-// ── Pulse wave SVG ────────────────────────────────────────────────────────────
+// ── ECG heartbeat SVG ──────────────────────────────────────────────────────────
 
 type DayData = Record<string, {
-  physical: { text: string } | null
-  mental: { text: string } | null
-  spiritual: { text: string } | null
+  physical: unknown; mental: unknown; spiritual: unknown
 }>
 
 function winCount(entry: DayData[string] | undefined, future: boolean): number {
@@ -229,139 +85,144 @@ function winCount(entry: DayData[string] | undefined, future: boolean): number {
   return CATEGORIES.filter(k => entry[k] !== null).length
 }
 
-function peakHeight(wins: number, maxH: number): number {
-  if (wins < 0)  return 0            // future — flat
-  if (wins === 0) return 2            // missed — tiny ripple
-  if (wins === 1) return maxH * 0.27
-  if (wins === 2) return maxH * 0.60
-  return maxH
-}
+function buildECGPath(days30: Date[], dayData: DayData, W: number, H: number): string {
+  const segW = W / days30.length
+  const baseline = H * 0.72
+  const maxPeak = H * 0.58
 
-function buildPath(
-  week: Date[],
-  baseline: number,
-  maxH: number,
-  dayData: DayData
-): string {
-  const dayW = SVG_W / 7
-  const pw = dayW * 0.42  // half-width of each smooth hill
+  const points: [number, number][] = days30.map((d, i) => {
+    const cx = segW * i + segW / 2
+    const future = isFuture(d)
+    const entry = dayData[dateKey(d)]
+    const wins = winCount(entry, future)
+    let y = baseline
+    if (wins === 3) y = baseline - maxPeak
+    else if (wins === 2) y = baseline - maxPeak * 0.55
+    else if (wins === 1) y = baseline - maxPeak * 0.22
+    else if (wins === 0) y = baseline - 4
+    else y = baseline // future
+    return [cx, y]
+  })
 
-  const segs: string[] = [`M 0,${baseline}`]
+  // Build smooth path through points using catmull-rom-like control points
+  let path = `M 0,${baseline}`
+  for (let i = 0; i < points.length; i++) {
+    const [cx, cy] = points[i]
+    const x0 = cx - segW * 0.35
+    const x1 = cx + segW * 0.35
+    const prevY = i > 0 ? points[i - 1][1] : baseline
+    const nextY = i < points.length - 1 ? points[i + 1][1] : baseline
 
-  for (let i = 0; i < 7; i++) {
-    const cx = dayW * (i + 0.5)
-    const x0 = cx - pw
-    const x1 = cx + pw
-    const future = isFuture(week[i])
-    const entry  = dayData[dateKey(week[i])]
-    const wins   = winCount(entry, future)
-    const h      = peakHeight(wins, maxH)
-    const yPeak  = baseline - h
-
-    segs.push(`L ${x0},${baseline}`)
-
-    // Smooth sine-like hill: control points at 60% width, full height
-    segs.push(`C ${x0 + pw * 0.6},${baseline} ${cx - pw * 0.2},${yPeak} ${cx},${yPeak}`)
-    segs.push(`C ${cx + pw * 0.2},${yPeak} ${x1 - pw * 0.6},${baseline} ${x1},${baseline}`)
+    path += ` L ${x0},${prevY}`
+    path += ` C ${x0 + segW * 0.15},${prevY} ${cx - segW * 0.1},${cy} ${cx},${cy}`
+    path += ` C ${cx + segW * 0.1},${cy} ${x1 - segW * 0.15},${nextY} ${x1},${nextY}`
   }
-
-  segs.push(`L ${SVG_W},${baseline}`)
-  return segs.join(' ')
+  path += ` L ${W},${baseline}`
+  return path
 }
 
-function PulseWaveSVG({ weeks, dayData }: { weeks: Date[][]; dayData: DayData }) {
-  const SWEEP_DUR = '5s'
+function ECGMonitor({ days30, dayData }: { days30: Date[]; dayData: DayData }) {
+  const W = 340
+  const H = 160
+  const baseline = H * 0.72
+  const ecgPath = buildECGPath(days30, dayData, W, H)
+  const fillPath = `${ecgPath} L ${W},${baseline} L 0,${baseline} Z`
+  const animDur = '3s'
 
   return (
-    <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }}>
-      <defs>
-        <linearGradient id="wave-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%"   stopColor="#1D9E75" />
-          <stop offset="48%"  stopColor="#7F77DD" />
-          <stop offset="100%" stopColor="#D85A30" />
-        </linearGradient>
-        <linearGradient id="wave-grad-fill" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%"   stopColor="#1D9E75" stopOpacity="0.15" />
-          <stop offset="48%"  stopColor="#7F77DD" stopOpacity="0.15" />
-          <stop offset="100%" stopColor="#D85A30" stopOpacity="0.15" />
-        </linearGradient>
-        {/* Sweeping clip — grows from 0 to full width then resets, like a monitor */}
-        <clipPath id="sweep-clip">
-          <rect x="0" y="-300" height="600" width="0">
-            <animate
-              attributeName="width"
-              from="0"
-              to={String(SVG_W)}
-              dur={SWEEP_DUR}
-              repeatCount="indefinite"
-              calcMode="linear"
-            />
-          </rect>
-        </clipPath>
-      </defs>
+    <div className="relative rounded-2xl bg-charcoal/4 border border-charcoal/8 overflow-hidden px-2 py-4">
+      {/* Subtle scan line */}
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ overflow: 'visible' }}>
+        <defs>
+          <linearGradient id="ecg-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%"   stopColor="#1D9E75" />
+            <stop offset="48%"  stopColor="#7F77DD" />
+            <stop offset="100%" stopColor="#D85A30" />
+          </linearGradient>
+          <linearGradient id="ecg-fill" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%"   stopColor="#7F77DD" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#7F77DD" stopOpacity="0" />
+          </linearGradient>
+          <clipPath id="ecg-sweep">
+            <rect x="0" y="0" height={H} width="0">
+              <animate attributeName="width" from="0" to={String(W)} dur={animDur} repeatCount="indefinite" calcMode="linear" />
+            </rect>
+          </clipPath>
+          <filter id="ecg-glow">
+            <feGaussianBlur stdDeviation="2" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
 
-      {/* Past week traces */}
-      {weeks.slice(0, -1).map((week, i) => {
-        const baseline = W_BASELINE[i]
-        const maxH     = W_MAX_H[i]
-        const basePath = buildPath(week, baseline, maxH, dayData)
-        const fillPath = `${basePath} L 0,${baseline} Z`
-        return (
-          <g key={i} style={{ opacity: W_OPACITY[i] }}>
-            <path d={fillPath} fill="rgba(44,44,42,0.06)" stroke="none" />
-            <path d={basePath} fill="none" stroke="rgba(44,44,42,1)"
-              strokeWidth={W_STROKE[i]} strokeLinecap="round" strokeLinejoin="round" />
-          </g>
-        )
-      })}
+        {/* Baseline grid line */}
+        <line x1="0" y1={baseline} x2={W} y2={baseline} stroke="rgba(44,44,42,0.08)" strokeWidth="1" />
 
-      {/* Current week — ghost trace + animated sweep */}
-      {(() => {
-        const i        = weeks.length - 1
-        const baseline = W_BASELINE[i]
-        const maxH     = W_MAX_H[i]
-        const basePath = buildPath(weeks[i], baseline, maxH, dayData)
-        const fillPath = `${basePath} L 0,${baseline} Z`
-        return (
-          <g key="current">
-            {/* Ghost fill — always visible, dim */}
-            <path d={fillPath} fill="url(#wave-grad-fill)" stroke="none" opacity="0.4" />
-            {/* Ghost stroke — always visible, dim */}
-            <path d={basePath} fill="none" stroke="url(#wave-grad)"
-              strokeWidth={W_STROKE[i]} strokeLinecap="round" strokeLinejoin="round" opacity="0.18" />
+        {/* Ghost fill + stroke always visible */}
+        <path d={fillPath} fill="url(#ecg-fill)" stroke="none" opacity="0.4" />
+        <path d={ecgPath} fill="none" stroke="url(#ecg-grad)" strokeWidth="1.5"
+          strokeLinecap="round" strokeLinejoin="round" opacity="0.15" />
 
-            {/* Bright swept portion — revealed by animated clip */}
-            <g clipPath="url(#sweep-clip)">
-              <path d={fillPath} fill="url(#wave-grad-fill)" stroke="none" />
-              <path d={basePath} fill="none" stroke="url(#wave-grad)"
-                strokeWidth={W_STROKE[i]} strokeLinecap="round" strokeLinejoin="round" />
-            </g>
+        {/* Swept bright portion */}
+        <g clipPath="url(#ecg-sweep)">
+          <path d={fillPath} fill="url(#ecg-fill)" stroke="none" />
+          <path d={ecgPath} fill="none" stroke="url(#ecg-grad)" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round" filter="url(#ecg-glow)" />
+        </g>
 
-            {/* Scanning cursor line at leading edge */}
-            <line y1="0" y2={SVG_H} stroke="url(#wave-grad)" strokeWidth="1.5" opacity="0.35">
-              <animate attributeName="x1" from="0" to={String(SVG_W)} dur={SWEEP_DUR} repeatCount="indefinite" calcMode="linear" />
-              <animate attributeName="x2" from="0" to={String(SVG_W)} dur={SWEEP_DUR} repeatCount="indefinite" calcMode="linear" />
-            </line>
-          </g>
-        )
-      })()}
-    </svg>
+        {/* Scanning cursor */}
+        <line y1="0" y2={H} stroke="url(#ecg-grad)" strokeWidth="1" opacity="0.5">
+          <animate attributeName="x1" from="0" to={String(W)} dur={animDur} repeatCount="indefinite" calcMode="linear" />
+          <animate attributeName="x2" from="0" to={String(W)} dur={animDur} repeatCount="indefinite" calcMode="linear" />
+        </line>
+      </svg>
+
+      {/* Label */}
+      <p className="font-sans text-xs text-charcoal/25 uppercase tracking-widest text-right pr-2 mt-1">30 days</p>
+    </div>
   )
 }
 
-// ── Day indicator row ─────────────────────────────────────────────────────────
+// ── Week dot row ───────────────────────────────────────────────────────────────
 
-function DayLabels({ week }: { week: Date[] }) {
+function WeekDots({
+  week,
+  days,
+  category,
+  elapsed,
+}: {
+  week: Date[]
+  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown }>
+  category: CategoryKey
+  elapsed: number
+}) {
   const todayStr = dateKey(new Date())
+
   return (
-    <div className="grid grid-cols-7 w-full">
-      {week.map((day, i) => {
-        const isToday = dateKey(day) === todayStr
+    <div className="flex gap-1.5 lg:gap-2">
+      {week.map((d, i) => {
+        const key = dateKey(d)
+        const future = isFuture(d)
+        const entry = days[key]
+        const logged = !future && entry && entry[category] !== null
+        const isToday = key === todayStr
+        const isPast = i < elapsed && !isToday
+
         return (
-          <div key={i} className="text-center">
-            <span className={`font-sans text-xs ${isToday ? 'text-charcoal/60 font-medium' : 'text-charcoal/28'}`}>
-              {DAY_LABELS[i]}
-            </span>
+          <div
+            key={i}
+            className={`w-7 h-7 lg:w-8 lg:h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
+              future
+                ? 'bg-charcoal/5'
+                : logged
+                ? `${ACCENT_BG[category]} opacity-90`
+                : isPast || isToday
+                ? 'bg-charcoal/10'
+                : 'bg-charcoal/5'
+            }`}
+          >
+            {isToday && (
+              <div className={`w-1.5 h-1.5 rounded-full ${logged ? 'bg-white/60' : 'bg-charcoal/30'}`} />
+            )}
           </div>
         )
       })}
@@ -369,64 +230,93 @@ function DayLabels({ week }: { week: Date[] }) {
   )
 }
 
-// ── Main screen ───────────────────────────────────────────────────────────────
+// ── Insight sentence ───────────────────────────────────────────────────────────
+
+function generateInsight(
+  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown }>,
+  labels: Record<CategoryKey, { label: string; definition: string }>,
+  week: Date[],
+  counts: Record<CategoryKey, number>,
+  elapsed: number,
+): string {
+  if (elapsed === 0) return 'A new week. Three categories, seven days, one question: what will you tend to?'
+
+  const strongest = CATEGORIES.reduce((a, b) => counts[a] >= counts[b] ? a : b)
+  const weakest = CATEGORIES.reduce((a, b) => counts[a] <= counts[b] ? a : b)
+  const aligned = week.filter(d => {
+    if (isFuture(d)) return false
+    const e = days[dateKey(d)]
+    return e && CATEGORIES.every(k => e[k] !== null)
+  }).length
+
+  if (aligned === elapsed && elapsed >= 3) return `${elapsed} days, ${elapsed} fully aligned. You're in it.`
+  if (counts[weakest] === 0 && elapsed >= 3) return `Your ${labels[weakest].label.toLowerCase()} practice has gone quiet this week. Worth noticing.`
+  if (counts[strongest] === elapsed && elapsed >= 2) return `Your ${labels[strongest].label.toLowerCase()} practice hasn't missed a day. Let that anchor the rest.`
+  if (aligned === 0 && elapsed >= 4) return `No fully aligned days yet. One whole day changes the feeling of the whole week.`
+  if (elapsed <= 2) return 'Early in the week. What you build from here is still entirely yours to shape.'
+  return `Your ${labels[strongest].label.toLowerCase()} is your strongest thread this week. Keep pulling it.`
+}
+
+// ── Main screen ────────────────────────────────────────────────────────────────
 
 export default function Pulse() {
   const { data } = useApp()
-  const weeks       = getLastNWeeks(5)
-  const currentWeek = weeks[weeks.length - 1]
-  const stats       = getWeekStats(data.days, currentWeek)
-  const categories  = data.onboarding.categories
-  const name        = data.onboarding.name ?? ''
-  const todayStr    = dateKey(new Date())
-  const letter      = generateLetter(stats, categories, currentWeek, name, todayStr)
+  const week = getCurrentWeek()
+  const days30 = getLast30Days()
+  const counts = getWeekCounts(data.days, week)
+  const categories = data.onboarding.categories
+  const todayStr = dateKey(new Date())
+  const elapsed = week.filter(d => !isFuture(d)).length
+  const insight = generateInsight(data.days, categories, week, counts, elapsed)
 
   return (
-    <div className="min-h-screen bg-beige max-w-md lg:max-w-6xl mx-auto px-6 lg:px-10 pt-12 lg:pt-16 pb-28 flex flex-col gap-8 lg:gap-10">
+    <div className="min-h-screen bg-beige max-w-md lg:max-w-3xl mx-auto px-6 lg:px-10 pt-12 lg:pt-16 pb-28 flex flex-col gap-8 lg:gap-10">
+
+      {/* Header */}
       <div className="flex flex-col gap-1">
         <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/40">Triova</p>
         <h1 className="font-serif text-2xl lg:text-4xl text-charcoal">Your pulse</h1>
-        <p className="font-sans text-xs lg:text-sm text-charcoal/40 leading-relaxed max-w-md mt-1">
-          Each line traces one week. A tall peak means all three wins landed that day, a smaller one means partial, and a flat stretch means the day passed quietly. Older weeks fade behind the current one.
-        </p>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-10 lg:gap-16">
-        {/* Wave */}
-        <div className="flex flex-col gap-3 lg:gap-4 lg:w-[440px] lg:shrink-0">
-          <PulseWaveSVG weeks={weeks} dayData={data.days} />
-          <DayLabels week={currentWeek} />
-        </div>
+      {/* ECG monitor */}
+      <ECGMonitor days30={days30} dayData={data.days} />
 
-        {/* Weekly letter */}
-        <div className="border-t lg:border-t-0 border-charcoal/10 pt-6 lg:pt-0 flex flex-col gap-1 flex-1 lg:max-w-xl">
-          <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/30 mb-3">
-            This week
-          </p>
-          {letter.split('\n').map((line, i) =>
-            line === '' ? (
-              <div key={i} className="h-2 lg:h-3" />
-            ) : (
-              <p
-                key={i}
-                className={`font-serif leading-relaxed ${
-                  line.startsWith('Dear')
-                    ? 'text-charcoal text-lg lg:text-2xl'
-                    : line === 'Triova'
-                    ? 'text-charcoal/50 text-base lg:text-lg italic'
-                    : line === 'Still with you.'
-                    ? 'text-charcoal/40 text-sm lg:text-base'
-                    : line.startsWith('"')
-                    ? 'text-charcoal/55 text-sm lg:text-base italic'
-                    : 'text-charcoal/70 text-sm lg:text-base'
-                }`}
-              >
-                {line}
-              </p>
-            )
-          )}
-        </div>
+      {/* Insight */}
+      <p className="font-serif text-base lg:text-xl text-charcoal/70 leading-relaxed">{insight}</p>
+
+      {/* Vital stats — one row per category */}
+      <div className="flex flex-col gap-5 lg:gap-6">
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/30">This week</p>
+
+        {CATEGORIES.map(k => {
+          const count = counts[k]
+          const label = categories[k].label
+
+          return (
+            <div key={k} className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className={`font-sans text-xs lg:text-sm uppercase tracking-widest font-medium ${ACCENT_TEXT[k]}`}>
+                  {label}
+                </span>
+                <span className="font-sans text-xs lg:text-sm text-charcoal/35">
+                  {count} of {elapsed} day{elapsed !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <WeekDots week={week} days={data.days} category={k} elapsed={elapsed} />
+              <div className="flex gap-1">
+                {DAY_LABELS.map((d, i) => (
+                  <div key={i} className="w-7 lg:w-8 text-center">
+                    <span className={`font-sans text-xs ${
+                      dateKey(week[i]) === todayStr ? 'text-charcoal/50 font-medium' : 'text-charcoal/20'
+                    }`}>{d}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
       </div>
+
     </div>
   )
 }
