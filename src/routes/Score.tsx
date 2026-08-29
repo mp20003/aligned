@@ -36,10 +36,6 @@ function isFuture(d: Date): boolean {
   return d > today
 }
 
-function isPastUnlogged(d: Date, days: Record<string, unknown>): boolean {
-  if (isFuture(d) || isToday(d)) return false
-  return !days[dateKey(d)]
-}
 
 function getMondayOfWeek(d: Date): Date {
   const day = new Date(d)
@@ -264,8 +260,8 @@ function Comet({ cx, cy, dateStr }: { cx: number; cy: number; dateStr: string })
   return (
     <g>
       <defs>
-        <linearGradient id={id} x1="0%" y1="0%" x2="100%" y2="0%" gradientUnits="userSpaceOnUse"
-          x1={`${cx}px`} y1={`${cy}px`} x2={`${tailEndX}px`} y2={`${tailEndY}px`}>
+        <linearGradient id={id} gradientUnits="userSpaceOnUse"
+          x1={`${cx}`} y1={`${cy}`} x2={`${tailEndX}`} y2={`${tailEndY}`}>
           <stop offset="0%" stopColor="white" stopOpacity="0.9" />
           <stop offset="100%" stopColor="white" stopOpacity="0" />
         </linearGradient>
