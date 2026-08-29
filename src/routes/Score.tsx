@@ -1,21 +1,24 @@
 /**
- * Pulse — Star Universe
+ * Triova — Star Universe
  *
- * Your practice rendered as a living universe. Each day you log all three
- * wins, a supernova fires and a star is born. Partial days birth a dimmer
- * star. Missed days that had a chance explode — one star, not the world.
+ * Each aligned day (3 wins) fires a supernova and births a realistic star.
+ * 1-2 wins: a comet flies in and rests. Missed past days explode and leave dust.
+ * Future / today-not-yet: nothing rendered.
  *
- * This week: your active constellation forming in real time.
- * Universe: every week ever, rendered as clusters of light.
- *
- * Never shows streaks, scores, or percentages.
+ * Universe panel: symbolic clusters — one per week, brightness = aligned days.
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
 import type { CategoryKey } from '../types'
 
 const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
+
+const CATEGORY_COLORS: Record<CategoryKey, string> = {
+  physical:  '#1D9E75',
+  mental:    '#7F77DD',
+  spiritual: '#D85A30',
+}
 
 // ── Date helpers ───────────────────────────────────────────────────────────────
 
@@ -23,10 +26,19 @@ function dateKey(d: Date) {
   return d.toISOString().split('T')[0]
 }
 
+function isToday(d: Date): boolean {
+  return dateKey(d) === dateKey(new Date())
+}
+
 function isFuture(d: Date): boolean {
   const today = new Date()
   today.setHours(23, 59, 59, 999)
   return d > today
+}
+
+function isPastUnlogged(d: Date, days: Record<string, unknown>): boolean {
+  if (isFuture(d) || isToday(d)) return false
+  return !days[dateKey(d)]
 }
 
 function getMondayOfWeek(d: Date): Date {
@@ -47,7 +59,6 @@ function getCurrentWeek(): Date[] {
   })
 }
 
-// Returns all weeks from the very first logged day up to and including current week
 function getAllWeeks(days: Record<string, unknown>): Date[][] {
   const keys = Object.keys(days).sort()
   if (keys.length === 0) return [getCurrentWeek()]
@@ -83,34 +94,10 @@ function strHash(str: string): number {
   return Math.abs(h)
 }
 
-// Generate 7 star positions for a week, deterministic from Monday's date string
-function getStarPositions(mondayStr: string, W: number, H: number): [number, number][] {
-  const rand = seededRand(strHash(mondayStr))
-  const padding = 28
-  const positions: [number, number][] = []
-  let attempts = 0
-  while (positions.length < 7 && attempts < 200) {
-    attempts++
-    const x = padding + rand() * (W - padding * 2)
-    const y = padding + rand() * (H - padding * 2)
-    // Ensure minimum distance from existing stars
-    const tooClose = positions.some(([px, py]) => {
-      const dx = px - x, dy = py - y
-      return Math.sqrt(dx * dx + dy * dy) < 44
-    })
-    if (!tooClose) positions.push([x, y])
-  }
-  // Fill remaining if crowded space
-  while (positions.length < 7) {
-    positions.push([padding + rand() * (W - padding * 2), padding + rand() * (H - padding * 2)])
-  }
-  return positions
-}
-
 // ── Win helpers ────────────────────────────────────────────────────────────────
 
 function getWins(
-  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown }>,
+  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown } | null>,
   dateStr: string
 ): number {
   const entry = days[dateStr]
@@ -118,12 +105,197 @@ function getWins(
   return CATEGORIES.filter(k => entry[k] !== null).length
 }
 
-// ── Explosion particles ────────────────────────────────────────────────────────
+// ── Star positions (deterministic per week) ────────────────────────────────────
+
+const SVG_W = 340
+const SVG_H = 280
+
+function getStarPositions(mondayStr: string): [number, number][] {
+  const rand = seededRand(strHash(mondayStr))
+  const padding = 36
+  const positions: [number, number][] = []
+  let attempts = 0
+  while (positions.length < 7 && attempts < 300) {
+    attempts++
+    const x = padding + rand() * (SVG_W - padding * 2)
+    const y = padding + rand() * (SVG_H - padding * 2)
+    const tooClose = positions.some(([px, py]) => {
+      const dx = px - x, dy = py - y
+      return Math.sqrt(dx * dx + dy * dy) < 52
+    })
+    if (!tooClose) positions.push([x, y])
+  }
+  while (positions.length < 7) {
+    positions.push([padding + rand() * (SVG_W - padding * 2), padding + rand() * (SVG_H - padding * 2)])
+  }
+  return positions
+}
+
+// ── Star type (seeded per date) ────────────────────────────────────────────────
+
+type StarType = 'diffraction' | 'giant' | 'binary' | 'cluster'
+
+function getStarType(dateStr: string): StarType {
+  const rand = seededRand(strHash(dateStr + 'type'))
+  const r = rand()
+  if (r < 0.45) return 'diffraction'
+  if (r < 0.70) return 'giant'
+  if (r < 0.85) return 'binary'
+  return 'cluster'
+}
+
+function hasPlanet(dateStr: string): boolean {
+  const rand = seededRand(strHash(dateStr + 'planet'))
+  return rand() < 0.28
+}
+
+function getPlanetColor(dateStr: string): string {
+  const rand = seededRand(strHash(dateStr + 'pcolor'))
+  const keys = Object.keys(CATEGORY_COLORS) as CategoryKey[]
+  return CATEGORY_COLORS[keys[Math.floor(rand() * keys.length)]]
+}
+
+function getPlanetAngle(dateStr: string): number {
+  const rand = seededRand(strHash(dateStr + 'pangle'))
+  return rand() * Math.PI * 2
+}
+
+// ── Realistic star SVG ─────────────────────────────────────────────────────────
+
+function RealisticStar({ cx, cy, type, dateStr, born }: {
+  cx: number; cy: number; type: StarType; dateStr: string; born: boolean
+}) {
+  const planet = hasPlanet(dateStr)
+  const planetColor = getPlanetColor(dateStr)
+  const planetAngle = getPlanetAngle(dateStr)
+  const planetDist = 18
+  const px = cx + Math.cos(planetAngle) * planetDist
+  const py = cy + Math.sin(planetAngle) * planetDist
+
+  const id = `glow-${dateStr.replace(/-/g, '')}`
+  const id2 = `glow2-${dateStr.replace(/-/g, '')}`
+
+  const starClass = born ? 'star-born' : 'star-full'
+
+  return (
+    <g className={starClass} style={{ transformOrigin: `${cx}px ${cy}px` }}>
+      <defs>
+        <radialGradient id={id} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="white" stopOpacity="0.9" />
+          <stop offset="35%" stopColor="white" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#7F77DD" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={id2} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="white" stopOpacity="1" />
+          <stop offset="100%" stopColor="white" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      {type === 'diffraction' && (
+        <>
+          {/* Outer glow */}
+          <circle cx={cx} cy={cy} r={22} fill={`url(#${id})`} />
+          {/* Diffraction spikes */}
+          <line x1={cx - 28} y1={cy} x2={cx + 28} y2={cy} stroke="white" strokeWidth="0.6" opacity="0.35" />
+          <line x1={cx} y1={cy - 28} x2={cx} y2={cy + 28} stroke="white" strokeWidth="0.6" opacity="0.35" />
+          <line x1={cx - 18} y1={cy - 18} x2={cx + 18} y2={cy + 18} stroke="white" strokeWidth="0.4" opacity="0.18" />
+          <line x1={cx + 18} y1={cy - 18} x2={cx - 18} y2={cy + 18} stroke="white" strokeWidth="0.4" opacity="0.18" />
+          {/* Core */}
+          <circle cx={cx} cy={cy} r={5} fill={`url(#${id2})`} />
+          <circle cx={cx} cy={cy} r={2.5} fill="white" />
+        </>
+      )}
+
+      {type === 'giant' && (
+        <>
+          <circle cx={cx} cy={cy} r={30} fill={`url(#${id})`} />
+          <circle cx={cx} cy={cy} r={10} fill="white" opacity="0.2" />
+          <circle cx={cx} cy={cy} r={6} fill={`url(#${id2})`} />
+          <circle cx={cx} cy={cy} r={3} fill="white" />
+        </>
+      )}
+
+      {type === 'binary' && (
+        <>
+          <circle cx={cx - 5} cy={cy} r={18} fill={`url(#${id})`} opacity="0.6" />
+          <circle cx={cx + 5} cy={cy} r={16} fill={`url(#${id2})`} opacity="0.4" />
+          <circle cx={cx - 5} cy={cy} r={3} fill="white" />
+          <circle cx={cx + 5} cy={cy} r={2.5} fill="white" opacity="0.85" />
+        </>
+      )}
+
+      {type === 'cluster' && (
+        <>
+          <circle cx={cx} cy={cy} r={20} fill={`url(#${id})`} />
+          <circle cx={cx} cy={cy - 6} r={2} fill="white" />
+          <circle cx={cx - 5} cy={cy + 4} r={1.8} fill="white" opacity="0.85" />
+          <circle cx={cx + 5} cy={cy + 4} r={1.5} fill="white" opacity="0.7" />
+        </>
+      )}
+
+      {/* Planet */}
+      {planet && (
+        <circle cx={px} cy={py} r={3.2} fill={planetColor} opacity="0.9" />
+      )}
+    </g>
+  )
+}
+
+// ── Comet (1–2 wins) ───────────────────────────────────────────────────────────
+
+function Comet({ cx, cy, dateStr }: { cx: number; cy: number; dateStr: string }) {
+  const rand = seededRand(strHash(dateStr + 'comet'))
+  // Entry angle: always coming from upper-left or upper-right quadrants
+  const angles = [Math.PI * 0.75, Math.PI * 1.25, Math.PI * 0.55, Math.PI * 1.45]
+  const angle = angles[Math.floor(rand() * angles.length)]
+  const dist = 90
+  const startX = cx + Math.cos(angle) * dist
+  const startY = cy + Math.sin(angle) * dist
+
+  // Tail direction is opposite to travel direction
+  const tailAngle = angle + Math.PI
+  const tailLen = 40 + rand() * 20
+  const tailEndX = cx + Math.cos(tailAngle) * tailLen * 0.6
+  const tailEndY = cy + Math.sin(tailAngle) * tailLen * 0.6
+
+  const id = `comet-grad-${dateStr.replace(/-/g, '')}`
+  const animId = `comet-anim-${dateStr.replace(/-/g, '')}`
+
+  return (
+    <g>
+      <defs>
+        <linearGradient id={id} x1="0%" y1="0%" x2="100%" y2="0%" gradientUnits="userSpaceOnUse"
+          x1={`${cx}px`} y1={`${cy}px`} x2={`${tailEndX}px`} y2={`${tailEndY}px`}>
+          <stop offset="0%" stopColor="white" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="white" stopOpacity="0" />
+        </linearGradient>
+        <style>{`
+          @keyframes ${animId} {
+            from { transform: translate(${startX - cx}px, ${startY - cy}px); opacity: 0; }
+            20% { opacity: 1; }
+            100% { transform: translate(0px, 0px); opacity: 1; }
+          }
+        `}</style>
+      </defs>
+      <g style={{ animation: `${animId} 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards`, transformOrigin: `${cx}px ${cy}px` }}>
+        {/* Tail */}
+        <line x1={cx} y1={cy} x2={tailEndX} y2={tailEndY}
+          stroke="white" strokeWidth="2.5" strokeLinecap="round" opacity="0.5" />
+        <line x1={cx} y1={cy} x2={tailEndX * 0.7 + cx * 0.3} y2={tailEndY * 0.7 + cy * 0.3}
+          stroke="white" strokeWidth="1" strokeLinecap="round" opacity="0.25" />
+        {/* Head */}
+        <circle cx={cx} cy={cy} r={8} fill="white" opacity="0.12" />
+        <circle cx={cx} cy={cy} r={3} fill="white" opacity="0.8" />
+        <circle cx={cx} cy={cy} r={1.5} fill="white" />
+      </g>
+    </g>
+  )
+}
+
+// ── Explosion + dust ───────────────────────────────────────────────────────────
 
 function ExplosionParticles({ cx, cy, onDone }: { cx: number; cy: number; onDone: () => void }) {
-  const PARTICLE_COUNT = 10
   const rand = seededRand(Math.round(cx * 100 + cy))
-
   useEffect(() => {
     const t = setTimeout(onDone, 1200)
     return () => clearTimeout(t)
@@ -131,30 +303,27 @@ function ExplosionParticles({ cx, cy, onDone }: { cx: number; cy: number; onDone
 
   return (
     <g>
-      {/* Nova rings */}
-      <circle cx={cx} cy={cy} r={0} fill="none" stroke="#D85A30" strokeWidth="1.5" opacity="0">
-        <animate attributeName="r" from="0" to="30" dur="0.7s" fill="freeze" />
-        <animate attributeName="opacity" from="0.8" to="0" dur="0.7s" fill="freeze" />
+      <circle cx={cx} cy={cy} r={0} fill="none" stroke="#D85A30" strokeWidth="1.5">
+        <animate attributeName="r" from="0" to="38" dur="0.7s" fill="freeze" />
+        <animate attributeName="opacity" from="0.9" to="0" dur="0.7s" fill="freeze" />
       </circle>
-      <circle cx={cx} cy={cy} r={0} fill="none" stroke="#7F77DD" strokeWidth="1" opacity="0">
-        <animate attributeName="r" from="0" to="18" dur="0.5s" fill="freeze" />
+      <circle cx={cx} cy={cy} r={0} fill="none" stroke="#7F77DD" strokeWidth="1">
+        <animate attributeName="r" from="0" to="22" dur="0.5s" fill="freeze" />
         <animate attributeName="opacity" from="0.6" to="0" dur="0.5s" fill="freeze" />
       </circle>
-      {/* Particles */}
-      {Array.from({ length: PARTICLE_COUNT }, (_, i) => {
-        const angle = (i / PARTICLE_COUNT) * Math.PI * 2
-        const dist = 18 + rand() * 20
+      {Array.from({ length: 12 }, (_, i) => {
+        const angle = (i / 12) * Math.PI * 2
+        const dist = 20 + rand() * 24
         const dx = Math.cos(angle) * dist
         const dy = Math.sin(angle) * dist
-        const size = 1 + rand() * 2
-        const colors = ['#D85A30', '#7F77DD', '#1D9E75', '#F5F0E8']
+        const size = 1.2 + rand() * 2
+        const colors = ['#D85A30', '#7F77DD', '#1D9E75', 'white']
         const color = colors[Math.floor(rand() * colors.length)]
         return (
           <circle key={i} cx={cx} cy={cy} r={size} fill={color}>
-            <animate attributeName="cx" to={cx + dx} dur="0.9s" fill="freeze" />
-            <animate attributeName="cy" to={cy + dy} dur="0.9s" fill="freeze" />
-            <animate attributeName="opacity" from="1" to="0" dur="0.9s" fill="freeze" />
-            <animate attributeName="r" from={size} to={size * 0.2} dur="0.9s" fill="freeze" />
+            <animate attributeName="cx" to={cx + dx} dur="1s" fill="freeze" />
+            <animate attributeName="cy" to={cy + dy} dur="1s" fill="freeze" />
+            <animate attributeName="opacity" from="1" to="0" dur="1s" fill="freeze" />
           </circle>
         )
       })}
@@ -162,161 +331,91 @@ function ExplosionParticles({ cx, cy, onDone }: { cx: number; cy: number; onDone
   )
 }
 
-// ── Nova birth flash ───────────────────────────────────────────────────────────
+function DustRemnant({ cx, cy, dateStr }: { cx: number; cy: number; dateStr: string }) {
+  const rand = seededRand(strHash(dateStr + 'dust'))
+  return (
+    <g opacity="0.22">
+      {Array.from({ length: 7 }, (_, i) => (
+        <circle key={i}
+          cx={cx + (rand() - 0.5) * 22}
+          cy={cy + (rand() - 0.5) * 22}
+          r={0.7 + rand() * 1.4}
+          fill="#D85A30"
+          opacity={0.3 + rand() * 0.5}
+        />
+      ))}
+      <circle cx={cx} cy={cy} r={1.2} fill="#7F77DD" opacity="0.35" />
+    </g>
+  )
+}
+
+// ── Nova burst (birth flash) ───────────────────────────────────────────────────
 
 function NovaBurst({ cx, cy, onDone }: { cx: number; cy: number; onDone: () => void }) {
   useEffect(() => {
-    const t = setTimeout(onDone, 800)
+    const t = setTimeout(onDone, 900)
     return () => clearTimeout(t)
   }, [onDone])
 
   return (
     <g>
-      <circle cx={cx} cy={cy} r={0} fill="#fff" opacity="0.9">
-        <animate attributeName="r" from="0" to="40" dur="0.4s" fill="freeze" />
-        <animate attributeName="opacity" from="0.9" to="0" dur="0.4s" fill="freeze" />
+      <circle cx={cx} cy={cy} r={0} fill="white" opacity="0.95">
+        <animate attributeName="r" from="0" to="80" dur="0.5s" fill="freeze" />
+        <animate attributeName="opacity" from="0.95" to="0" dur="0.5s" fill="freeze" />
       </circle>
-      <circle cx={cx} cy={cy} r={0} fill="none" stroke="#1D9E75" strokeWidth="2" opacity="0">
-        <animate attributeName="r" from="0" to="25" dur="0.6s" fill="freeze" />
-        <animate attributeName="opacity" from="0.8" to="0" dur="0.6s" fill="freeze" />
+      <circle cx={cx} cy={cy} r={0} fill="none" stroke="#1D9E75" strokeWidth="2.5">
+        <animate attributeName="r" from="0" to="55" dur="0.7s" fill="freeze" />
+        <animate attributeName="opacity" from="0.8" to="0" dur="0.7s" fill="freeze" />
       </circle>
-      <circle cx={cx} cy={cy} r={0} fill="none" stroke="#7F77DD" strokeWidth="1.5" opacity="0">
-        <animate attributeName="r" from="0" to="36" dur="0.7s" fill="freeze" />
-        <animate attributeName="opacity" from="0.5" to="0" dur="0.7s" fill="freeze" />
+      <circle cx={cx} cy={cy} r={0} fill="none" stroke="#7F77DD" strokeWidth="1.5">
+        <animate attributeName="r" from="0" to="70" dur="0.85s" fill="freeze" />
+        <animate attributeName="opacity" from="0.5" to="0" dur="0.85s" fill="freeze" />
       </circle>
     </g>
   )
 }
 
-// ── Single star ────────────────────────────────────────────────────────────────
-
-type StarStatus = 'future' | 'full' | 'partial' | 'missed' | 'exploding' | 'dust'
-
-function Star({
-  cx, cy, wins, status, dayIndex,
-}: {
-  cx: number; cy: number; wins: number; status: StarStatus; dayIndex: number
-}) {
-  const delay = `${dayIndex * 0.4}s`
-
-  if (status === 'dust') {
-    // Scattered dust remnant after explosion
-    const rand = seededRand(Math.round(cx * 7 + cy * 3))
-    return (
-      <g opacity="0.25" style={{ animation: `universe-drift ${5 + dayIndex}s ease-in-out infinite`, animationDelay: `${dayIndex * 0.7}s` }}>
-        {Array.from({ length: 5 }, (_, i) => (
-          <circle
-            key={i}
-            cx={cx + (rand() - 0.5) * 18}
-            cy={cy + (rand() - 0.5) * 18}
-            r={0.8 + rand() * 1.2}
-            fill="#D85A30"
-            opacity={0.3 + rand() * 0.4}
-          />
-        ))}
-        <circle cx={cx} cy={cy} r={1.5} fill="#7F77DD" opacity="0.3" />
-      </g>
-    )
-  }
-
-  if (status === 'future') {
-    return <circle cx={cx} cy={cy} r={1.5} fill="rgba(44,44,42,0.08)" />
-  }
-
-  if (status === 'full') {
-    const points = starPoints(cx, cy, 5, 7, 3.5)
-    return (
-      <g className="star-full" style={{ animationDelay: delay, transformOrigin: `${cx}px ${cy}px` }}>
-        {/* Glow */}
-        <circle cx={cx} cy={cy} r={10} fill="url(#star-glow)" opacity="0.4" />
-        {/* Star shape */}
-        <polygon points={points} fill="white" opacity="0.95" />
-        {/* Colour tint based on wins */}
-        <circle cx={cx} cy={cy} r={3} fill="#7F77DD" opacity="0.5" />
-      </g>
-    )
-  }
-
-  if (status === 'partial') {
-    const r = wins === 2 ? 3.5 : 2.2
-    return (
-      <g className="star-partial" style={{ animationDelay: delay, transformOrigin: `${cx}px ${cy}px` }}>
-        <circle cx={cx} cy={cy} r={r + 3} fill="rgba(127,119,221,0.12)" />
-        <circle cx={cx} cy={cy} r={r} fill="rgba(200,195,240,0.7)" />
-      </g>
-    )
-  }
-
-  if (status === 'missed') {
-    // Truly missed — never logged anything
-    return <circle cx={cx} cy={cy} r={1.2} fill="rgba(44,44,42,0.12)" />
-  }
-
-  return null
-}
-
-function starPoints(cx: number, cy: number, n: number, r1: number, r2: number): string {
-  const pts: string[] = []
-  for (let i = 0; i < n * 2; i++) {
-    const angle = (i * Math.PI) / n - Math.PI / 2
-    const r = i % 2 === 0 ? r1 : r2
-    pts.push(`${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`)
-  }
-  return pts.join(' ')
-}
-
 // ── Week constellation ─────────────────────────────────────────────────────────
 
-const SVG_W = 320
-const SVG_H = 260
-
 type ExplodingDay = { dateStr: string; cx: number; cy: number }
-type BornDay = { dateStr: string; cx: number; cy: number }
+type BornDay      = { dateStr: string; cx: number; cy: number }
 
 function WeekConstellation({
   week,
   days,
 }: {
   week: Date[]
-  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown }>
+  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown } | null>
 }) {
   const mondayStr = dateKey(week[0])
-  const positions = getStarPositions(mondayStr, SVG_W, SVG_H)
+  const positions = getStarPositions(mondayStr)
 
   const [exploding, setExploding] = useState<ExplodingDay[]>([])
-  const [born, setBorn] = useState<BornDay[]>([])
   const [dusts, setDusts] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('triova-dusts') ?? '[]')) }
     catch { return new Set() }
   })
+  const [novaQueue, setNovaQueue] = useState<BornDay[]>([])
+  const [activeNova, setActiveNova] = useState<BornDay | null>(null)
   const [seenBorn, setSeenBorn] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('triova-born') ?? '[]')) }
     catch { return new Set() }
   })
 
-  // On mount: check for missed days that need explosion, and newly completed days
   useEffect(() => {
     const toExplode: ExplodingDay[] = []
     const toBorn: BornDay[] = []
-    const newDusts = new Set(dusts)
     const newSeenBorn = new Set(seenBorn)
 
     week.forEach((d, i) => {
-      if (isFuture(d)) return
+      if (isFuture(d) || isToday(d)) return
       const dk = dateKey(d)
       const wins = getWins(days, dk)
       const [cx, cy] = positions[i]
 
-      // Missed day that hasn't been exploded yet
-      if (wins === 0 && !newDusts.has(dk)) {
-        // Only explode if it's actually a past day (not today that hasn't been logged yet)
-        const isToday = dk === dateKey(new Date())
-        if (!isToday) {
-          toExplode.push({ dateStr: dk, cx, cy })
-        }
+      if (wins === 0 && !dusts.has(dk)) {
+        toExplode.push({ dateStr: dk, cx, cy })
       }
-
-      // Fully aligned day — play birth nova once
       if (wins === 3 && !newSeenBorn.has(dk)) {
         toBorn.push({ dateStr: dk, cx, cy })
         newSeenBorn.add(dk)
@@ -326,24 +425,30 @@ function WeekConstellation({
     if (toBorn.length > 0) {
       setSeenBorn(newSeenBorn)
       localStorage.setItem('triova-born', JSON.stringify([...newSeenBorn]))
-      // Stagger birth animations
-      toBorn.forEach((b, i) => {
-        setTimeout(() => {
-          setBorn(prev => [...prev, b])
-        }, i * 600)
-      })
+      setNovaQueue(toBorn)
     }
 
     if (toExplode.length > 0) {
-      // Stagger explosions
+      const delay = toBorn.length > 0 ? 1200 : 0
       toExplode.forEach((e, i) => {
-        setTimeout(() => {
-          setExploding(prev => [...prev, e])
-        }, toBorn.length * 600 + i * 700 + 400)
+        setTimeout(() => setExploding(prev => [...prev, e]), delay + i * 700)
       })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Play nova queue one at a time
+  useEffect(() => {
+    if (activeNova === null && novaQueue.length > 0) {
+      const [next, ...rest] = novaQueue
+      setActiveNova(next)
+      setNovaQueue(rest)
+    }
+  }, [activeNova, novaQueue])
+
+  function handleNovaDone() {
+    setActiveNova(null)
+  }
 
   function handleExplosionDone(dk: string) {
     setExploding(prev => prev.filter(e => e.dateStr !== dk))
@@ -355,266 +460,179 @@ function WeekConstellation({
     })
   }
 
-  function handleBornDone(dk: string) {
-    setBorn(prev => prev.filter(b => b.dateStr !== dk))
-  }
-
   const isExplodingSet = new Set(exploding.map(e => e.dateStr))
+  const activeNovaKey = activeNova?.dateStr ?? null
+
+  // Constellation lines between full stars
+  const fullStarIndices: number[] = []
+  week.forEach((d, i) => {
+    if (isFuture(d) || isToday(d)) return
+    const dk = dateKey(d)
+    if (getWins(days, dk) === 3 && !dusts.has(dk) && !isExplodingSet.has(dk)) {
+      fullStarIndices.push(i)
+    }
+  })
 
   return (
     <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }}>
-      <defs>
-        <radialGradient id="star-glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="white" stopOpacity="0.8" />
-          <stop offset="100%" stopColor="white" stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id="bg-grad" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#1a1a2e" stopOpacity="0.06" />
-          <stop offset="100%" stopColor="#1a1a2e" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-
-      {/* Subtle deep-space background circle */}
-      <ellipse cx={SVG_W / 2} cy={SVG_H / 2} rx={130} ry={110} fill="url(#bg-grad)" />
-
-      {/* Connecting lines between full stars (faint constellation lines) */}
-      {week.map((d, i) => {
-        const dk = dateKey(d)
-        const wins = getWins(days, dk)
-        if (wins < 3 || isFuture(d) || dusts.has(dk)) return null
-        // Connect to nearest full-star neighbour
-        for (let j = i + 1; j < week.length; j++) {
-          const dk2 = dateKey(week[j])
-          const wins2 = getWins(days, dk2)
-          if (wins2 === 3 && !dusts.has(dk2) && !isFuture(week[j])) {
-            const [x1, y1] = positions[i]
-            const [x2, y2] = positions[j]
-            return <line key={`${i}-${j}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="0.5" opacity="0.15" />
-          }
-        }
-        return null
+      {/* Constellation lines */}
+      {fullStarIndices.slice(0, -1).map((i, idx) => {
+        const j = fullStarIndices[idx + 1]
+        const [x1, y1] = positions[i]
+        const [x2, y2] = positions[j]
+        return <line key={`${i}-${j}`} x1={x1} y1={y1} x2={x2} y2={y2}
+          stroke="white" strokeWidth="0.5" opacity="0.12" />
       })}
 
-      {/* Stars */}
+      {/* Stars, comets, dust */}
       {week.map((d, i) => {
         const dk = dateKey(d)
-        const wins = getWins(days, dk)
         const [cx, cy] = positions[i]
-        const future = isFuture(d)
-        const isToday = dk === dateKey(new Date())
 
-        let status: StarStatus
-        if (future) status = 'future'
-        else if (isExplodingSet.has(dk)) status = 'future' // hidden during explosion
-        else if (dusts.has(dk)) status = 'dust'
-        else if (wins === 3) status = 'full'
-        else if (wins > 0) status = 'partial'
-        else if (isToday) status = 'future' // today not yet logged
-        else status = 'missed'
+        if (isFuture(d) || isToday(d)) return null
+        if (isExplodingSet.has(dk)) return null
+        if (activeNovaKey === dk) return null // hidden while nova plays
 
-        return <Star key={dk} cx={cx} cy={cy} wins={wins} status={status} dayIndex={i} />
+        if (dusts.has(dk)) {
+          return <DustRemnant key={dk} cx={cx} cy={cy} dateStr={dk} />
+        }
+
+        const wins = getWins(days, dk)
+        if (wins === 3) {
+          return (
+            <RealisticStar
+              key={dk}
+              cx={cx} cy={cy}
+              type={getStarType(dk)}
+              dateStr={dk}
+              born={false}
+            />
+          )
+        }
+        if (wins > 0) {
+          return <Comet key={dk} cx={cx} cy={cy} dateStr={dk} />
+        }
+        // wins === 0 but not exploded yet means it's being queued — show nothing
+        return null
       })}
 
       {/* Explosion animations */}
       {exploding.map(e => (
-        <ExplosionParticles key={e.dateStr} cx={e.cx} cy={e.cy} onDone={() => handleExplosionDone(e.dateStr)} />
+        <ExplosionParticles key={e.dateStr} cx={e.cx} cy={e.cy}
+          onDone={() => handleExplosionDone(e.dateStr)} />
       ))}
 
-      {/* Birth nova animations */}
-      {born.map(b => (
-        <NovaBurst key={b.dateStr} cx={b.cx} cy={b.cy} onDone={() => handleBornDone(b.dateStr)} />
-      ))}
+      {/* Nova burst + star appear */}
+      {activeNova && (() => {
+        const { dateStr, cx, cy } = activeNova
+        return (
+          <g key={dateStr}>
+            <NovaBurst cx={cx} cy={cy} onDone={handleNovaDone} />
+            <RealisticStar cx={cx} cy={cy} type={getStarType(dateStr)} dateStr={dateStr} born={true} />
+          </g>
+        )
+      })()}
     </svg>
   )
 }
 
-// ── Universe view ──────────────────────────────────────────────────────────────
+// ── Universe panel (Option B — symbolic clusters) ──────────────────────────────
 
-const UNI_W = 320
-const UNI_H = 320
-const CLUSTER_R = 28 // radius within which a week's stars sit
+const UNI_W = 340
+const UNI_H = 260
+const CLUSTER_R = 22
 
-function getClusterCenters(weekCount: number): [number, number][] {
-  // Arrange clusters in an organic spiral/scatter
-  const rand = seededRand(42)
+function getClusterCenters(count: number): [number, number][] {
+  const rand = seededRand(9999)
+  const padding = 32
   const centers: [number, number][] = []
-  const padding = 40
   let attempts = 0
-
-  while (centers.length < weekCount && attempts < 2000) {
+  while (centers.length < count && attempts < 3000) {
     attempts++
     const x = padding + rand() * (UNI_W - padding * 2)
     const y = padding + rand() * (UNI_H - padding * 2)
     const tooClose = centers.some(([px, py]) => {
       const dx = px - x, dy = py - y
-      return Math.sqrt(dx * dx + dy * dy) < CLUSTER_R * 2.4
+      return Math.sqrt(dx * dx + dy * dy) < CLUSTER_R * 2.6
     })
     if (!tooClose) centers.push([x, y])
   }
-  // Fill remaining if space exhausted
-  while (centers.length < weekCount) {
+  while (centers.length < count) {
     centers.push([padding + rand() * (UNI_W - padding * 2), padding + rand() * (UNI_H - padding * 2)])
   }
   return centers
 }
 
-function UniverseView({
+function UniversePanel({
   weeks,
   days,
 }: {
   weeks: Date[][]
-  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown }>
+  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown } | null>
 }) {
   const centers = getClusterCenters(weeks.length)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-
-  function handleShare() {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const a = document.createElement('a')
-    a.href = canvas.toDataURL('image/png')
-    a.download = `triova-universe-${dateKey(new Date())}.png`
-    a.click()
-  }
-
-  // Draw shareable canvas
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    const scale = 2
-    canvas.width = UNI_W * scale
-    canvas.height = UNI_H * scale
-    ctx.scale(scale, scale)
-
-    // Background
-    ctx.fillStyle = '#F5F0E8'
-    ctx.fillRect(0, 0, UNI_W, UNI_H)
-
-    weeks.forEach((week, wi) => {
-      const [cx, cy] = centers[wi]
-      const rand = seededRand(strHash(dateKey(week[0])))
-      const weekHasAny = week.some(d => !isFuture(d) && getWins(days, dateKey(d)) > 0)
-
-      if (!weekHasAny) {
-        // Void — dark patch
-        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, CLUSTER_R * 0.8)
-        grad.addColorStop(0, 'rgba(44,44,42,0.08)')
-        grad.addColorStop(1, 'rgba(44,44,42,0)')
-        ctx.fillStyle = grad
-        ctx.beginPath()
-        ctx.arc(cx, cy, CLUSTER_R * 0.8, 0, Math.PI * 2)
-        ctx.fill()
-        return
-      }
-
-      week.forEach(d => {
-        if (isFuture(d)) return
-        const wins = getWins(days, dateKey(d))
-        const sx = cx + (rand() - 0.5) * CLUSTER_R * 1.6
-        const sy = cy + (rand() - 0.5) * CLUSTER_R * 1.6
-        if (wins === 3) {
-          ctx.beginPath()
-          ctx.arc(sx, sy, 2.5, 0, Math.PI * 2)
-          ctx.fillStyle = 'rgba(127,119,221,0.9)'
-          ctx.fill()
-          // Glow
-          const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, 6)
-          g.addColorStop(0, 'rgba(127,119,221,0.4)')
-          g.addColorStop(1, 'rgba(127,119,221,0)')
-          ctx.fillStyle = g
-          ctx.beginPath()
-          ctx.arc(sx, sy, 6, 0, Math.PI * 2)
-          ctx.fill()
-        } else if (wins > 0) {
-          ctx.beginPath()
-          ctx.arc(sx, sy, 1.2, 0, Math.PI * 2)
-          ctx.fillStyle = 'rgba(44,44,42,0.3)'
-          ctx.fill()
-        }
-      })
-    })
-
-    ctx.fillStyle = 'rgba(44,44,42,0.2)'
-    ctx.font = '500 9px Inter, system-ui'
-    ctx.fillText('TRIOVA', 12, UNI_H - 10)
-  }, [weeks, days, centers])
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/30">Your universe</p>
-        <button
-          onClick={handleShare}
-          className="font-sans text-xs text-charcoal/30 underline underline-offset-2 hover:text-charcoal/50 transition-colors"
-        >
-          Save image
-        </button>
-      </div>
-
-      {/* SVG live view */}
-      <div className="rounded-2xl border border-charcoal/8 overflow-hidden bg-charcoal/2 relative" style={{ minHeight: UNI_H }}>
+      <p className="font-sans text-xs uppercase tracking-widest text-white/25">Your universe</p>
+      <div className="rounded-2xl overflow-hidden" style={{ background: '#0a0a14' }}>
         <svg viewBox={`0 0 ${UNI_W} ${UNI_H}`} className="w-full">
-          <defs>
-            <radialGradient id="uni-star-glow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#7F77DD" stopOpacity="0.5" />
-              <stop offset="100%" stopColor="#7F77DD" stopOpacity="0" />
-            </radialGradient>
-          </defs>
-
           {weeks.map((week, wi) => {
             const [cx, cy] = centers[wi]
-            const rand = seededRand(strHash(dateKey(week[0])))
-            const weekHasAny = week.some(d => !isFuture(d) && getWins(days, dateKey(d)) > 0)
             const isCurrent = wi === weeks.length - 1
+            const rand = seededRand(strHash(dateKey(week[0]) + 'uni'))
 
-            if (!weekHasAny) {
+            // Count aligned days in this week
+            const alignedDays = week.filter(d => !isFuture(d) && getWins(days, dateKey(d)) === 3)
+            const partialDays = week.filter(d => {
+              const w = getWins(days, dateKey(d))
+              return !isFuture(d) && w > 0 && w < 3
+            })
+
+            if (alignedDays.length === 0 && partialDays.length === 0) {
+              // Void week — dark smudge
               return (
-                <circle key={wi} cx={cx} cy={cy} r={CLUSTER_R * 0.6}
-                  fill="rgba(44,44,42,0.04)" stroke="rgba(44,44,42,0.06)" strokeWidth="0.5" />
+                <g key={wi}>
+                  <circle cx={cx} cy={cy} r={CLUSTER_R * 0.7}
+                    fill="rgba(255,255,255,0.02)" />
+                </g>
               )
             }
 
+            // Place bright dots for aligned days, dim dots for partial
+            const allDots = [
+              ...alignedDays.map(() => ({ bright: true })),
+              ...partialDays.map(() => ({ bright: false })),
+            ]
+
             return (
-              <g key={wi} className={isCurrent ? 'star-drift' : ''} style={{ animationDelay: `${wi * 0.3}s` }}>
-                {week.map((d, di) => {
-                  if (isFuture(d)) return null
-                  const wins = getWins(days, dateKey(d))
-                  const sx = cx + (rand() - 0.5) * CLUSTER_R * 1.6
-                  const sy = cy + (rand() - 0.5) * CLUSTER_R * 1.6
-
-                  if (wins === 3) {
-                    return (
-                      <g key={di} className="star-full" style={{ animationDelay: `${wi * 0.4 + di * 0.1}s`, transformOrigin: `${sx}px ${sy}px` }}>
-                        <circle cx={sx} cy={sy} r={7} fill="url(#uni-star-glow)" />
-                        <circle cx={sx} cy={sy} r={2.2} fill="white" opacity="0.9" />
-                      </g>
-                    )
-                  } else if (wins > 0) {
-                    return <circle key={di} cx={sx} cy={sy} r={1} fill="rgba(44,44,42,0.25)" />
-                  }
-                  return null
+              <g key={wi} className={isCurrent ? 'star-drift' : ''} style={{ animationDelay: `${wi * 0.2}s` }}>
+                {allDots.map((dot, di) => {
+                  const angle = rand() * Math.PI * 2
+                  const dist = rand() * CLUSTER_R * 0.85
+                  const sx = cx + Math.cos(angle) * dist
+                  const sy = cy + Math.sin(angle) * dist
+                  return dot.bright ? (
+                    <g key={di}>
+                      <circle cx={sx} cy={sy} r={5} fill="white" opacity="0.08" />
+                      <circle cx={sx} cy={sy} r={1.8} fill="white" opacity="0.9" />
+                    </g>
+                  ) : (
+                    <circle key={di} cx={sx} cy={sy} r={1} fill="white" opacity="0.2" />
+                  )
                 })}
-
-                {/* Faint cluster boundary for current week */}
                 {isCurrent && (
-                  <circle cx={cx} cy={cy} r={CLUSTER_R} fill="none"
-                    stroke="rgba(127,119,221,0.12)" strokeWidth="1" strokeDasharray="3 4" />
+                  <circle cx={cx} cy={cy} r={CLUSTER_R + 4}
+                    fill="none" stroke="rgba(127,119,221,0.2)" strokeWidth="1" strokeDasharray="3 5" />
                 )}
               </g>
             )
           })}
         </svg>
-
-        {/* Tooltip: week count */}
-        <p className="absolute bottom-3 right-3 font-sans text-xs text-charcoal/20 uppercase tracking-widest">
-          {weeks.length} week{weeks.length !== 1 ? 's' : ''}
-        </p>
       </div>
-
-      {/* Hidden canvas for export */}
-      <canvas ref={canvasRef} className="hidden" />
+      <p className="font-sans text-xs text-white/20 text-right">
+        {weeks.length} week{weeks.length !== 1 ? 's' : ''}
+      </p>
     </div>
   )
 }
@@ -627,17 +645,18 @@ export default function Pulse() {
   const allWeeks = getAllWeeks(data.days)
   const todayStr = dateKey(new Date())
   const todayWins = getWins(data.days, todayStr)
-  const weekAligned = week.filter(d => !isFuture(d) && getWins(data.days, dateKey(d)) === 3).length
-  const elapsed = week.filter(d => !isFuture(d)).length
+  const weekAligned = week.filter(d => !isFuture(d) && !isToday(d) && getWins(data.days, dateKey(d)) === 3).length
+  const elapsed = week.filter(d => !isFuture(d) && !isToday(d)).length
 
   return (
-    <div className="min-h-screen bg-beige max-w-md lg:max-w-2xl mx-auto px-6 lg:px-10 pt-12 lg:pt-16 pb-28 flex flex-col gap-10">
+    <div className="min-h-screen max-w-md lg:max-w-2xl mx-auto px-6 lg:px-10 pt-12 lg:pt-16 pb-28 flex flex-col gap-10"
+      style={{ background: '#0a0a14' }}>
 
       {/* Header */}
       <div className="flex flex-col gap-1">
-        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/40">Triova</p>
-        <h1 className="font-serif text-2xl lg:text-4xl text-charcoal">Your pulse</h1>
-        <p className="font-sans text-xs lg:text-sm text-charcoal/40 leading-relaxed mt-1">
+        <p className="font-sans text-xs uppercase tracking-widest text-white/25">Triova</p>
+        <h1 className="font-serif text-2xl lg:text-4xl text-white">Your pulse</h1>
+        <p className="font-sans text-xs text-white/30 leading-relaxed mt-1">
           Every win you log fires a supernova. Every star you birth is yours to keep.
         </p>
       </div>
@@ -645,33 +664,34 @@ export default function Pulse() {
       {/* This week */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-charcoal/30">This week</p>
-          <p className="font-sans text-xs text-charcoal/30">
+          <p className="font-sans text-xs uppercase tracking-widest text-white/25">This week</p>
+          <p className="font-sans text-xs text-white/25">
             {weekAligned} star{weekAligned !== 1 ? 's' : ''} born · {elapsed} day{elapsed !== 1 ? 's' : ''} elapsed
           </p>
         </div>
-        <div className="rounded-2xl border border-charcoal/8 bg-charcoal/2 overflow-hidden">
+
+        <div className="rounded-2xl overflow-hidden" style={{ background: '#0d0d1e' }}>
           <WeekConstellation week={week} days={data.days} />
         </div>
+
         {todayWins < 3 && (
-          <p className="font-serif text-sm text-charcoal/40 italic text-center">
+          <p className="font-serif text-sm text-white/30 italic text-center">
             {todayWins === 0
               ? 'Log your first win today to birth a star.'
               : todayWins === 1
-              ? "One win in. Two more and tonight’s star ignites."
+              ? "One win in. Two more and tonight's star ignites."
               : 'Two wins in. One more to fire the supernova.'}
           </p>
         )}
         {todayWins === 3 && (
-          <p className="font-serif text-sm text-charcoal/60 italic text-center">
+          <p className="font-serif text-sm text-white/50 italic text-center">
             All three wins logged. Tonight's star is alive.
           </p>
         )}
       </div>
 
       {/* Universe */}
-      <UniverseView weeks={allWeeks} days={data.days} />
-
+      <UniversePanel weeks={allWeeks} days={data.days} />
     </div>
   )
 }
