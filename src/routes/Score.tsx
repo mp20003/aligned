@@ -360,7 +360,6 @@ function WeekConstellation({
   }
 
   const isExplodingSet = new Set(exploding.map(e => e.dateStr))
-  const isBornSet = new Set(born.map(b => b.dateStr))
 
   return (
     <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }}>
