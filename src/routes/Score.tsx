@@ -564,8 +564,6 @@ function UniversePanel({
   weeks: Date[][]
   days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown } | null>
 }) {
-  // Only show past weeks (not current)
-  const pastWeeks = weeks.slice(0, -1)
   const padding = 36
 
   return (
@@ -573,10 +571,10 @@ function UniversePanel({
       <p className="font-sans text-xs uppercase tracking-widest text-white/25">Your universe</p>
       <div className="rounded-2xl overflow-hidden" style={{ background: '#0a0a14' }}>
         <svg viewBox={`0 0 ${UNI_W} ${UNI_H}`} className="w-full">
-          {pastWeeks.map((week, wi) => {
+          {weeks.map((week, wi) => {
+            const isCurrent = wi === weeks.length - 1
             const mondayStr = dateKey(week[0])
             const [cx, cy] = getClusterCenter(mondayStr, UNI_W, UNI_H, padding)
-            const rand = seededRand(strHash(mondayStr + 'uni'))
 
             // Use scaled-down positions for cluster shape variety
             const fullPositions = getStarPositions(mondayStr)
@@ -591,15 +589,17 @@ function UniversePanel({
               return <g key={wi} />
             }
 
-            // Map each day to its cluster position
-            const dayIndices = pastDays.map(d => week.indexOf(d))
-
             return (
               <g key={wi}>
+                {/* Soft glow ring for current week — marks where it's forming */}
+                {isCurrent && (
+                  <circle cx={cx} cy={cy} r={CLUSTER_R + 5}
+                    fill="none" stroke="rgba(127,119,221,0.18)" strokeWidth="1" strokeDasharray="2 4" />
+                )}
                 {/* Bright stars — aligned days */}
                 {alignedDays.map((d, di) => {
-                  const idx = dayIndices[pastDays.indexOf(d)]
-                  const [sx, sy] = idx >= 0 ? clusterPositions[idx] : [cx + (rand() - 0.5) * CLUSTER_R, cy + (rand() - 0.5) * CLUSTER_R]
+                  const idx = week.indexOf(d)
+                  const [sx, sy] = clusterPositions[idx]
                   return (
                     <g key={`a${di}`}>
                       <circle cx={sx} cy={sy} r={5} fill="white" opacity="0.07" />
@@ -609,14 +609,14 @@ function UniversePanel({
                 })}
                 {/* Dim dots — partial days */}
                 {partialDays.map((d, di) => {
-                  const idx = dayIndices[pastDays.indexOf(d)]
-                  const [sx, sy] = idx >= 0 ? clusterPositions[idx] : [cx + (rand() - 0.5) * CLUSTER_R, cy + (rand() - 0.5) * CLUSTER_R]
+                  const idx = week.indexOf(d)
+                  const [sx, sy] = clusterPositions[idx]
                   return <circle key={`p${di}`} cx={sx} cy={sy} r={1} fill="white" opacity="0.2" />
                 })}
                 {/* Dead stars — fully missed days (dust specks) */}
                 {deadDays.map((d, di) => {
-                  const idx = dayIndices[pastDays.indexOf(d)]
-                  const [sx, sy] = idx >= 0 ? clusterPositions[idx] : [cx + (rand() - 0.5) * CLUSTER_R, cy + (rand() - 0.5) * CLUSTER_R]
+                  const idx = week.indexOf(d)
+                  const [sx, sy] = clusterPositions[idx]
                   return <circle key={`d${di}`} cx={sx} cy={sy} r={1.2} fill="#D85A30" opacity="0.35" />
                 })}
               </g>
