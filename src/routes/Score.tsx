@@ -487,7 +487,6 @@ function WeekConstellation({
 
         if (isFuture(d) || isToday(d)) return null
         if (isExplodingSet.has(dk)) return null
-        if (activeNovaKey === dk) return null // hidden while nova plays
 
         if (dusts.has(dk)) {
           return <DustRemnant key={dk} cx={cx} cy={cy} dateStr={dk} />
@@ -508,7 +507,6 @@ function WeekConstellation({
         if (wins > 0) {
           return <Comet key={dk} cx={cx} cy={cy} dateStr={dk} />
         }
-        // wins === 0 but not exploded yet means it's being queued — show nothing
         return null
       })}
 
@@ -518,16 +516,10 @@ function WeekConstellation({
           onDone={() => handleExplosionDone(e.dateStr)} />
       ))}
 
-      {/* Nova burst + star appear */}
-      {activeNova && (() => {
-        const { dateStr, cx, cy } = activeNova
-        return (
-          <g key={dateStr}>
-            <NovaBurst cx={cx} cy={cy} onDone={handleNovaDone} />
-            <RealisticStar cx={cx} cy={cy} type={getStarType(dateStr)} dateStr={dateStr} born={true} />
-          </g>
-        )
-      })()}
+      {/* Nova burst overlaid on top of star */}
+      {activeNova && (
+        <NovaBurst key={activeNova.dateStr} cx={activeNova.cx} cy={activeNova.cy} onDone={handleNovaDone} />
+      )}
     </svg>
   )
 }
@@ -578,44 +570,46 @@ function UniversePanel({
             const isCurrent = wi === weeks.length - 1
             const rand = seededRand(strHash(dateKey(week[0]) + 'uni'))
 
-            // Count aligned days in this week
-            const alignedDays = week.filter(d => !isFuture(d) && getWins(days, dateKey(d)) === 3)
-            const partialDays = week.filter(d => {
-              const w = getWins(days, dateKey(d))
-              return !isFuture(d) && w > 0 && w < 3
-            })
+            const pastDays = week.filter(d => !isFuture(d) && !isToday(d))
+            const alignedDays = pastDays.filter(d => getWins(days, dateKey(d)) === 3)
+            const partialDays = pastDays.filter(d => { const w = getWins(days, dateKey(d)); return w > 0 && w < 3 })
+            const deadDays = pastDays.filter(d => getWins(days, dateKey(d)) === 0 && days[dateKey(d)] !== undefined)
 
-            if (alignedDays.length === 0 && partialDays.length === 0) {
-              // Void week — dark smudge
-              return (
-                <g key={wi}>
-                  <circle cx={cx} cy={cy} r={CLUSTER_R * 0.7}
-                    fill="rgba(255,255,255,0.02)" />
-                </g>
-              )
+            if (alignedDays.length === 0 && partialDays.length === 0 && deadDays.length === 0) {
+              // No data at all — invisible
+              return <g key={wi} />
             }
-
-            // Place bright dots for aligned days, dim dots for partial
-            const allDots = [
-              ...alignedDays.map(() => ({ bright: true })),
-              ...partialDays.map(() => ({ bright: false })),
-            ]
 
             return (
               <g key={wi} className={isCurrent ? 'star-drift' : ''} style={{ animationDelay: `${wi * 0.2}s` }}>
-                {allDots.map((dot, di) => {
+                {/* Bright stars — aligned days */}
+                {alignedDays.map((_, di) => {
                   const angle = rand() * Math.PI * 2
                   const dist = rand() * CLUSTER_R * 0.85
                   const sx = cx + Math.cos(angle) * dist
                   const sy = cy + Math.sin(angle) * dist
-                  return dot.bright ? (
-                    <g key={di}>
-                      <circle cx={sx} cy={sy} r={5} fill="white" opacity="0.08" />
+                  return (
+                    <g key={`a${di}`}>
+                      <circle cx={sx} cy={sy} r={5} fill="white" opacity="0.07" />
                       <circle cx={sx} cy={sy} r={1.8} fill="white" opacity="0.9" />
                     </g>
-                  ) : (
-                    <circle key={di} cx={sx} cy={sy} r={1} fill="white" opacity="0.2" />
                   )
+                })}
+                {/* Dim dots — partial days */}
+                {partialDays.map((_, di) => {
+                  const angle = rand() * Math.PI * 2
+                  const dist = rand() * CLUSTER_R * 0.85
+                  const sx = cx + Math.cos(angle) * dist
+                  const sy = cy + Math.sin(angle) * dist
+                  return <circle key={`p${di}`} cx={sx} cy={sy} r={1} fill="white" opacity="0.2" />
+                })}
+                {/* Dead stars — fully missed days (dust specks) */}
+                {deadDays.map((_, di) => {
+                  const angle = rand() * Math.PI * 2
+                  const dist = rand() * CLUSTER_R * 0.85
+                  const sx = cx + Math.cos(angle) * dist
+                  const sy = cy + Math.sin(angle) * dist
+                  return <circle key={`d${di}`} cx={sx} cy={sy} r={1.2} fill="#D85A30" opacity="0.35" />
                 })}
                 {isCurrent && (
                   <circle cx={cx} cy={cy} r={CLUSTER_R + 4}
@@ -626,9 +620,6 @@ function UniversePanel({
           })}
         </svg>
       </div>
-      <p className="font-sans text-xs text-white/20 text-right">
-        {weeks.length} week{weeks.length !== 1 ? 's' : ''}
-      </p>
     </div>
   )
 }
