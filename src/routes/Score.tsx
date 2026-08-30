@@ -290,13 +290,19 @@ function RealisticStar({ cx, cy, type, dateStr, born, onSelect }: {
   const starClass = born ? 'star-born' : 'star-full'
 
   return (
-    <g className={starClass} style={{ transformOrigin: `${cx}px ${cy}px` }}>
-      {/* Invisible hit area, sized to stay clear of neighbouring stars (min spacing 44) */}
+    <>
+      {/*
+        Hit area lives OUTSIDE the twinkling group below: that group has a
+        continuous CSS transform animation (star-twinkle), and animated SVG
+        transforms are unreliable click/tap targets on some mobile browsers.
+        Keeping this circle static guarantees it's always tappable.
+      */}
       <circle
         cx={cx} cy={cy} r={20} fill="transparent" pointerEvents="all"
         style={{ cursor: 'pointer' }}
         onClick={onSelect}
       />
+      <g className={starClass} style={{ transformOrigin: `${cx}px ${cy}px`, pointerEvents: 'none' }}>
       <defs>
         <radialGradient id={id} cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor={color} stopOpacity="0.9" />
@@ -364,7 +370,8 @@ function RealisticStar({ cx, cy, type, dateStr, born, onSelect }: {
           <circle cx={px - 0.8} cy={py - 0.8} r={1.1} fill="white" opacity="0.4" />
         </g>
       )}
-    </g>
+      </g>
+    </>
   )
 }
 
