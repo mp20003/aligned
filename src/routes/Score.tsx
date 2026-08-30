@@ -460,7 +460,6 @@ function WeekConstellation({
   }
 
   const isExplodingSet = new Set(exploding.map(e => e.dateStr))
-  const activeNovaKey = activeNova?.dateStr ?? null
 
   // Constellation lines between full stars
   const fullStarIndices: number[] = []
