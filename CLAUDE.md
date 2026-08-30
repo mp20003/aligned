@@ -1,90 +1,71 @@
-# Aligned — Product & Engineering Reference
+# Triova — Product & Engineering Reference
 
 ---
 
-## Current Build State (handoff note — updated at context limit)
+## Current Build State (handoff note — updated 2026-08-30)
 
 ### App name
-**Aligned** — confirmed. GitHub repo: `https://github.com/mp20003/aligned`
+**Triova** (renamed from "Aligned"/"Three Wins"). GitHub repo: `https://github.com/mp20003/aligned` (repo name predates the rename, left as-is). Deployed on Vercel, auto-deploys on push to `main`.
 
-### What is built and deployed (Vercel)
-All four screens are complete and live:
+### Stack (current, not the original brief)
+Vite + React + TypeScript + Tailwind CSS + React Router v7 + **Supabase** (Google OAuth + Postgres). `localStorage` is now a local cache/offline fallback, not the source of truth — `AppContext` (`src/context/AppContext.tsx`) syncs to a Supabase `app_data` table keyed by `user_id` on every write. Signed-out users hit a `Login` screen (`src/routes/Login.tsx`, Google sign-in only). No email/magic-link auth (removed).
 
-| Screen | File | Status |
+### Screens — 5 total, all live
+| Screen | File | Route |
 |---|---|---|
-| Onboarding | `src/routes/Onboarding.tsx` | ✅ Complete |
-| Today | `src/routes/Today.tsx` | ✅ Complete |
-| History | `src/routes/History.tsx` | ✅ Complete |
-| Pulse | `src/routes/Score.tsx` | ✅ Complete |
+| Onboarding | `src/routes/Onboarding.tsx` | `/onboarding` |
+| Today | `src/routes/Today.tsx` | `/today` |
+| History | `src/routes/History.tsx` | `/history` |
+| **Triova** (was "Pulse", was rings) | `src/routes/Score.tsx` | `/score` |
+| Settings | `src/routes/Settings.tsx` | `/settings` |
 
-### Key decisions made (not in original brief)
-- **App name:** Aligned
-- **"Score" screen renamed to "Pulse"** — Pulse is also the name of the app's guiding entity
-- **Pulse entity** — a non-human presence that guides the user. Introduced on the onboarding intro screen. Signs the weekly letter. Attribution shown on Today prompts ("— Pulse"). Not a character, not an AI — a presence.
-- **Node.js path** — installed at `C:\Program Files\nodejs`. The `.claude/launch.json` uses the full path: `C:\\Program Files\\nodejs\\node.exe`
-- **Routing:** React Router v7 (user confirmed)
-- **Fonts:** Lora (serif) + Inter (sans-serif) via Google Fonts
+Bottom nav (`src/components/NavBar.tsx`) has all 4 navigable items — **Today, History, Triova, Settings**. Settings used to only be reachable via a header button on Today's pre-aligned view (a real bug — once a day was aligned, or on any other screen, there was no way back to it). It's now in the nav bar permanently.
 
-### State shape (actual, as built)
-```ts
-type AppData = {
-  onboarding: {
-    completed: boolean
-    name: string                          // user's name, asked on intro screen
-    categories: Record<CategoryKey, { label: string; definition: string }>
-  }
-  days: Record<string, DayEntry>          // key: "YYYY-MM-DD"
-}
+### Visual identity — full dark theme (not the original beige/light spec)
+The "Colour Palette" section further down in this doc describes the **original light-theme spec and is stale** — the app pivoted to dark. Actual values in use:
+- Background: `#0a0a14` / `#0f0f1a` (near-black navy)
+- Surfaces: `rgba(255,255,255,0.05)` with `rgba(255,255,255,0.08–0.15)` borders
+- Text: `rgba(255,255,255,0.9)` primary, down to `rgba(255,255,255,0.15–0.35)` for muted/label text
+- Category accents unchanged: Physical `#1D9E75`, Mental `#7F77DD`, Spiritual `#D85A30`
+- Page transitions via `AnimatedRoutes` in `src/App.tsx`; micro-interactions `.btn-lift`, `.chip-press`, `.confirm-ring` in `src/index.css`
 
-type DayEntry = {
-  physical:  WinEntry | null
-  mental:    WinEntry | null
-  spiritual: WinEntry | null
-}
+### The "Pulse" concept from the original spec is gone
+There is no "Pulse" guiding-entity character anymore. The Score screen (renamed **Triova**, not "Pulse") is a star/universe visualization, not concentric breathing rings, a 0–100 score, or a weekly letter. Further down, "## Screens (MVP)" → "### 3. Alignment Score" and any onboarding-intro-entity mentions describe that replaced version — ignore them in favor of this note.
 
-type WinEntry = {
-  text: string
-  completedAt: string    // ISO timestamp
-  reflection?: string    // one word: Hard / Easy / Meaningful / Routine
-}
-```
+### Triova screen (`src/routes/Score.tsx`) — how it actually works
+**This Week panel** (`WeekConstellation`): SVG viewBox 220×200. 7 day-positions seeded from the Monday date string, packed with a minimum 44-unit spacing so nothing overlaps. Each fully-aligned day (3/3 wins) is a **realistic star** — exactly one glow style (`diffraction` spike or `giant` corona, 50/50, both single-core-dot — two other styles, `binary`/`cluster`, used to draw 2-3 dots per star and were removed for looking like multiple stars). Star colour is seeded from `{orange, red, blue, white}`. Each star can have **0–3 orbiting planets** (weighted 45/30/18/7% for 0/1/2/3), each on its own concentric ring with independently seeded angle/colour/speed via SVG `animateTransform`, clearly smaller than the star. **Today renders/fires its star immediately once it hits 3/3** — it used to be hard-excluded until the next day, which meant the "watch a star get born" payoff was invisible on the day you actually earned it; fixed. 1–2 win days render a `Comet`; fully-missed *past* days explode once into `DustRemnant` (orange dust) — today never explodes while still in progress. A `NovaBurst` flash plays once per star via a one-time flag.
 
-### Today screen behaviour
-- Reflective prompt built from user's category labels (e.g. "Where is your physical practice calling you today?"), attributed "— Pulse"
-- Win cards show: daily-rotating suggestion chips (3 per category, curated list in Today.tsx), previous wins from history as chips, free text input
-- After tapping Done: one-word reflection prompt (Hard / Easy / Meaningful / Routine)
-- After all 3 wins: soft pulse animation → aligned state with stacked colour-bar cards
-- Aligned state has "Edit today's wins" link to go back
+Every star and (if any) its planets get procedurally-generated names, seeded from the date (`getStarName`/`getPlanetNames` — e.g. "Vantor-482", planets suffixed "b"/"c"/"d"). **Tap a star** (not hover — mobile-first, hover doesn't work on touch) to see its name/date; tap again or tap elsewhere to dismiss. Tapping is a **single delegated click handler on the whole panel** that does distance-math against seeded star positions, not per-star SVG hit targets — two earlier attempts at per-star invisible hit-circles were unreliable (worth knowing if this ever needs revisiting: don't go back to per-shape SVG click targets for this, delegate at the panel level).
 
-### Pulse screen behaviour
-- Three concentric SVG rings (Physical=outer, Mental=middle, Spiritual=inner)
-- Each ring fills based on days logged / 7 for current week
-- Rings breathe (expand/contract) at staggered rates — keyframe in `src/index.css`
-- Static background track ring always visible so progress is clear
-- 7-day dot grid per category below rings
-- Weekly letter: personal, opens "Dear [name]," generated from pattern logic, signed "With you, Pulse"
+**Universe panel** (`UniversePanel`): one small cluster per week (including the current week, live), cluster centers seeded per-Monday but packed with 56-unit minimum spacing (they used to be placed independently with no collision avoidance, which could land two clusters on top of each other — likely the cause of "stray"-looking dots reported once). Each week gets a procedural two-word name (`getClusterName`, e.g. "Ember Drift"). **Exactly one dot per aligned day** (used to be two layered circles per day). Hover a cluster to see its name + date range (still hover-based, not tap — wasn't reported as broken, unlike This Week's stars).
 
-### History screen behaviour
-- 30-day grid, date numbers inside each cell circle
-- Balanced = conic gradient (all three colours), Partial = muted, Missed = very light
-- One insight sentence from pattern analysis
-- No streaks, no percentages
+**One-time animation flags**: a date that's exploded into dust or had its star born gets a permanent flag in `localStorage` (`triova-dusts` / `triova-born`) so the animation doesn't replay. This is easy to get wrong — nothing that mutates `days` should leave these stale. `AppContext.tsx` now clears them correctly: `logWin`/`clearDay`/`clearRange` clear just the affected date(s); `resetPractice`/`signOut`/`restoreData` clear both sets entirely. If you add any new way to mutate `data.days`, make sure it also calls the relevant clear.
 
-### Onboarding screen behaviour
-- Intro screen: Pulse introduction, breathing orb, "What should Pulse call you?" name field, Begin button
-- 3 category steps: explanation, tappable example chips, definition textarea
-- Spiritual step has label picker (Spiritual/Soulful/Intentional/Creative/custom)
-- Navigates to Today on completion, never shown again
+### History screen (`src/routes/History.tsx`) — recent changes
+- Day-cell states are now visually distinct by **size**, not just opacity: 3 wins = full conic-gradient circle; 2 wins = large filled disc; 1 win = small "ember" dot; 0 wins = **genuinely blank**, just a faint outline (used to be a barely-different faint grey dot for all three non-full states — that was the actual complaint).
+- Selecting a day with any wins shows a **"Clear day"** link (confirms via `window.confirm`, calls `clearDay` from `AppContext`).
+- Share-card canvas export mirrors the same visual language.
+
+### Settings screen (`src/routes/Settings.tsx`) — recent addition
+**"Clear a month"** tool: native `<input type="month">` + two-step confirm (same pattern as "Reset practice"), calls `clearRange(startDate, endDate)` in `AppContext`. Added because a user had stray/test data in a specific month they wanted gone and there was no way to do that short of a full reset.
+
+### AppContext (`src/context/AppContext.tsx`) — data-mutation surface
+`logWin`, `clearDay(date)`, `clearRange(start, end)`, `updateSettings`, `resetPractice`, `restoreData(imported)`, `signOut`. All funnel through a single `update()` that writes `localStorage` + upserts to Supabase when a session exists. See the "one-time animation flags" note above — every one of these except `updateSettings` also has to reconcile `triova-dusts`/`triova-born`.
+
+### Known testing limitation (this session)
+The Browser-pane's **mobile touch emulation was unreliable in this session** — clicks (including on completely unrelated elements like nav `<Link>`s) timed out and the pane reported itself stuck/hidden. Don't trust a single mobile-emulated repro as proof of a real bug without also checking whether *anything* clicks in that tab; test via `preset: "desktop"` first as a sanity check, and prefer architectural fixes (e.g. delegate click handling to a big stable container) over chasing specific mobile-touch-event theories when the emulator itself is behaving oddly.
 
 ### Dev environment
-- `npm run dev` starts Vite on port 5173
-- `C:\Program Files\nodejs\node.exe` must be in PATH or used directly
-- `.claude/launch.json` configured for preview tool
+- `npm run dev` → Vite on port 5173. `npm run build` → `tsc -b && vite build` (also serves as the type-check).
+- Node at `C:\Program Files\nodejs\node.exe`; `.claude/launch.json` configured for the preview tool.
+- To test authenticated screens without real Google sign-in, a temporary `?dev=1` bypass was added/removed from `src/App.tsx` (`authLoading`/`session` gate) during debugging sessions — **not currently in the code**, re-add-and-revert if needed rather than leaving it in.
 
-### Pending / next session ideas
-- The `"You said: ..."` hint below the input on win cards may be redundant since definition is already the placeholder — consider removing
-- Could add a name setting (allow user to change their name after onboarding)
-- Claude API integration was mentioned in the brief as a future feature — not yet wired
+### Pending / not yet done
+- Universe cluster hover isn't tap-friendly on mobile (This Week's stars were fixed to tap; clusters weren't, since it wasn't reported as broken — same fix pattern would apply if needed).
+- PWA / App Store packaging — not built.
+- Claude API integration for smarter prompts — mentioned in the original brief, still not wired.
+- No way to change name post-onboarding (Settings has category editing but the name field wiring should already work — double check `updateSettings` covers it before assuming this needs building).
+- The "You said: ..." hint on win cards may be redundant with the definition-as-placeholder — noted but never actioned.
 
 ---
 
@@ -99,14 +80,14 @@ The unit of success is **alignment** (all three categories touched), not volume 
 ## Tech Stack
 
 - **Framework:** Vite + React (TypeScript)
-- **Styling:** Tailwind CSS with custom theme (see below)
+- **Styling:** Tailwind CSS with custom theme (see below — note the theme has since gone full dark, see handoff note)
 - **Routing:** React Router v7
-- **Persistence:** localStorage only — no backend
+- **Persistence:** Supabase (Postgres + Google OAuth) is the source of truth; localStorage is a local cache/offline fallback. This superseded the original "localStorage only, no backend" plan — see handoff note.
 - **Fonts:** Lora (serif, headings) + Inter (sans-serif, UI) via Google Fonts
 - **Deployment:** Vercel via GitHub
 
 ### Dependency Rule
-Do not add a backend, authentication, or any third-party analytics. Do not install unnecessary dependencies. If unsure whether to add something, ask first.
+Do not add third-party analytics. Do not install unnecessary dependencies. If unsure whether to add something, ask first. (The original "no backend/auth" rule was superseded when Supabase + Google OAuth were added — that was an explicit decision, not a violation of this rule; it doesn't reopen the door to adding other backends/auth providers without asking.)
 
 ### Decision Rule
 Before making any architectural decision — routing library, state management, animation library — stop and propose two options with a one-line tradeoff. Don't pick without explicit user approval.
@@ -209,36 +190,12 @@ After each build session, review what was built as a skeptical product designer 
 
 ---
 
-## App Name (TBC)
+## App Name — resolved
 
-Working title: **Three Wins**. Alternatives under consideration: Triad, Aligned, Still.
+**Triova.** (This section originally listed working titles under consideration — Three Wins, Triad, Aligned, Still. Decided; see the handoff note at the top.)
 
 ---
 
-## State Shape (localStorage)
+## State Shape
 
-```ts
-// Key: "three-wins-data"
-type AppData = {
-  onboarding: {
-    completed: boolean;
-    categories: {
-      physical: { label: string; definition: string };
-      mental:   { label: string; definition: string };
-      spiritual: { label: string; definition: string };
-    };
-  };
-  days: Record<string, DayEntry>; // key: "YYYY-MM-DD"
-};
-
-type DayEntry = {
-  physical:  WinEntry | null;
-  mental:    WinEntry | null;
-  spiritual: WinEntry | null;
-};
-
-type WinEntry = {
-  text: string;
-  completedAt: string; // ISO timestamp
-};
-```
+Superseded by the handoff note at the top of this doc, which has the actual current shape (includes `name` and `reflection`, and notes that localStorage is now a cache backed by Supabase, not the source of truth). Authoritative source: `src/types.ts`.
