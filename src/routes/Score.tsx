@@ -101,6 +101,36 @@ function getWins(
   return CATEGORIES.filter(k => entry[k] !== null).length
 }
 
+type DaysMap = Record<string, { physical: unknown; mental: unknown; spiritual: unknown } | null>
+
+// Single source of truth for "which days in this week are aligned/partial/dead" —
+// shared by the This Week header count, the constellation, and the universe cluster
+// so the numbers can never drift apart from each other.
+function getAlignedDates(week: Date[], days: DaysMap): Date[] {
+  return week.filter(d => !isFuture(d) && !isToday(d) && getWins(days, dateKey(d)) === 3)
+}
+
+function getPartialDates(week: Date[], days: DaysMap): Date[] {
+  return week.filter(d => {
+    if (isFuture(d) || isToday(d)) return false
+    const w = getWins(days, dateKey(d))
+    return w > 0 && w < 3
+  })
+}
+
+function getDeadDates(week: Date[], days: DaysMap): Date[] {
+  return week.filter(d => {
+    if (isFuture(d) || isToday(d)) return false
+    const dk = dateKey(d)
+    return getWins(days, dk) === 0 && days[dk] !== undefined
+  })
+}
+
+function formatWeekRange(week: Date[]): string {
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
+  return `${week[0].toLocaleDateString('en-US', opts)} – ${week[6].toLocaleDateString('en-US', opts)}`
+}
+
 // ── Star positions ─────────────────────────────────────────────────────────────
 // This-week panel: zoomed-in viewBox so stars render large with full detail.
 // Universe clusters: same relative positions, scaled down to CLUSTER_R.
@@ -158,6 +188,20 @@ function getPlanetAngle(dateStr: string): number {
   return rand() * Math.PI * 2
 }
 
+function getOrbitDuration(dateStr: string): number {
+  const rand = seededRand(strHash(dateStr + 'orbitdur'))
+  return 8 + rand() * 6 // 8–14s, varies per star
+}
+
+// ── Star colour (seeded per date) ──────────────────────────────────────────────
+
+const STAR_COLORS = ['#FFA94D', '#FF6B5E', '#6FA8FF', '#FFFFFF'] as const
+
+function getStarColor(dateStr: string): string {
+  const rand = seededRand(strHash(dateStr + 'starcolor'))
+  return STAR_COLORS[Math.floor(rand() * STAR_COLORS.length)]
+}
+
 // ── Realistic star SVG ─────────────────────────────────────────────────────────
 
 function RealisticStar({ cx, cy, type, dateStr, born }: {
@@ -166,9 +210,14 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
   const planet = hasPlanet(dateStr)
   const planetColor = getPlanetColor(dateStr)
   const planetAngle = getPlanetAngle(dateStr)
+  const planetAngleDeg = (planetAngle * 180) / Math.PI
   const planetDist = 26
-  const px = cx + Math.cos(planetAngle) * planetDist
-  const py = cy + Math.sin(planetAngle) * planetDist
+  // Base (unrotated) position — animateTransform below spins this around (cx,cy)
+  const px = cx + planetDist
+  const py = cy
+  const orbitDuration = getOrbitDuration(dateStr)
+
+  const color = getStarColor(dateStr)
 
   const id = `glow-${dateStr.replace(/-/g, '')}`
   const id2 = `glow2-${dateStr.replace(/-/g, '')}`
@@ -179,9 +228,9 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
     <g className={starClass} style={{ transformOrigin: `${cx}px ${cy}px` }}>
       <defs>
         <radialGradient id={id} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="white" stopOpacity="0.9" />
-          <stop offset="35%" stopColor="white" stopOpacity="0.4" />
-          <stop offset="100%" stopColor="#7F77DD" stopOpacity="0" />
+          <stop offset="0%" stopColor={color} stopOpacity="0.9" />
+          <stop offset="35%" stopColor={color} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
         </radialGradient>
         <radialGradient id={id2} cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="white" stopOpacity="1" />
@@ -228,12 +277,20 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
         </>
       )}
 
-      {/* Planet — clearly visible coloured orb */}
+      {/* Planet — small orbiting orb, clearly smaller than the star */}
       {planet && (
         <g>
-          <circle cx={px} cy={py} r={10} fill={planetColor} opacity="0.12" />
-          <circle cx={px} cy={py} r={5.5} fill={planetColor} opacity="0.9" />
-          <circle cx={px - 1.5} cy={py - 1.5} r={2} fill="white" opacity="0.4" />
+          <animateTransform
+            attributeName="transform"
+            type="rotate"
+            from={`${planetAngleDeg} ${cx} ${cy}`}
+            to={`${planetAngleDeg + 360} ${cx} ${cy}`}
+            dur={`${orbitDuration}s`}
+            repeatCount="indefinite"
+          />
+          <circle cx={px} cy={py} r={6} fill={planetColor} opacity="0.12" />
+          <circle cx={px} cy={py} r={3} fill={planetColor} opacity="0.9" />
+          <circle cx={px - 0.8} cy={py - 0.8} r={1.1} fill="white" opacity="0.4" />
         </g>
       )}
     </g>
@@ -579,10 +636,9 @@ function UniversePanel({
             const fullPositions = getStarPositions(mondayStr)
             const clusterPositions = scalePositionsToCluster(fullPositions, cx, cy, CLUSTER_R)
 
-            const pastDays = week.filter(d => !isFuture(d) && !isToday(d))
-            const alignedDays = pastDays.filter(d => getWins(days, dateKey(d)) === 3)
-            const partialDays = pastDays.filter(d => { const w = getWins(days, dateKey(d)); return w > 0 && w < 3 })
-            const deadDays = pastDays.filter(d => getWins(days, dateKey(d)) === 0 && days[dateKey(d)] !== undefined)
+            const alignedDays = getAlignedDates(week, days)
+            const partialDays = getPartialDates(week, days)
+            const deadDays = getDeadDates(week, days)
 
             if (alignedDays.length === 0 && partialDays.length === 0 && deadDays.length === 0) {
               return <g key={wi} />
@@ -590,6 +646,9 @@ function UniversePanel({
 
             return (
               <g key={wi}>
+                <title>{formatWeekRange(week)}</title>
+                {/* Invisible hit area — hover anywhere near the cluster to see its week */}
+                <circle cx={cx} cy={cy} r={CLUSTER_R + 8} fill="transparent" style={{ cursor: 'default' }} />
                 {/* Soft glow ring for current week — marks where it's forming */}
                 {isCurrent && (
                   <circle cx={cx} cy={cy} r={CLUSTER_R + 5}
@@ -635,7 +694,7 @@ export default function Pulse() {
   const allWeeks = getAllWeeks(data.days)
   const todayStr = dateKey(new Date())
   const todayWins = getWins(data.days, todayStr)
-  const weekAligned = week.filter(d => !isFuture(d) && !isToday(d) && getWins(data.days, dateKey(d)) === 3).length
+  const weekAligned = getAlignedDates(week, data.days).length
   const elapsed = week.filter(d => !isFuture(d) && !isToday(d)).length
 
   return (
@@ -645,7 +704,7 @@ export default function Pulse() {
       {/* Header */}
       <div className="flex flex-col gap-1">
         <p className="font-sans text-xs uppercase tracking-widest text-white/25">Triova</p>
-        <h1 className="font-serif text-2xl lg:text-4xl text-white">Your pulse</h1>
+        <h1 className="font-serif text-2xl lg:text-4xl text-white">Your Triova</h1>
         <p className="font-sans text-xs text-white/30 leading-relaxed mt-1">
           Every win you log fires a supernova. Every star you birth is yours to keep.
         </p>
@@ -654,7 +713,9 @@ export default function Pulse() {
       {/* This week */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <p className="font-sans text-xs uppercase tracking-widest text-white/25">This week</p>
+          <p className="font-sans text-xs uppercase tracking-widest text-white/25">
+            This week · {formatWeekRange(week)}
+          </p>
           <p className="font-sans text-xs text-white/25">
             {weekAligned} star{weekAligned !== 1 ? 's' : ''} born · {elapsed} day{elapsed !== 1 ? 's' : ''} elapsed
           </p>
