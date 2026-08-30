@@ -152,8 +152,11 @@ function getStarName(dateStr: string): string {
   return `${part}-${num}`
 }
 
-function getPlanetName(dateStr: string): string {
-  return `${getStarName(dateStr)} b`
+const PLANET_LETTERS = ['b', 'c', 'd']
+
+function getPlanetNames(dateStr: string, count: number): string[] {
+  const star = getStarName(dateStr)
+  return PLANET_LETTERS.slice(0, count).map(letter => `${star} ${letter}`)
 }
 
 const CLUSTER_ADJ = [
@@ -225,37 +228,40 @@ function getStarPositions(mondayStr: string): [number, number][] {
 }
 
 // ── Star type (seeded per date) ────────────────────────────────────────────────
+// Each type still has its own glow/spike shape, but always exactly one bright
+// core point — no type renders more than one "dot" for a single star.
 
-type StarType = 'diffraction' | 'giant' | 'binary' | 'cluster'
+type StarType = 'diffraction' | 'giant'
 
 function getStarType(dateStr: string): StarType {
   const rand = seededRand(strHash(dateStr + 'type'))
+  return rand() < 0.5 ? 'diffraction' : 'giant'
+}
+
+// A star can have 0–3 planets, weighted toward fewer.
+function getPlanetCount(dateStr: string): number {
+  const rand = seededRand(strHash(dateStr + 'planetcount'))
   const r = rand()
-  if (r < 0.45) return 'diffraction'
-  if (r < 0.70) return 'giant'
-  if (r < 0.85) return 'binary'
-  return 'cluster'
+  if (r < 0.45) return 0
+  if (r < 0.75) return 1
+  if (r < 0.93) return 2
+  return 3
 }
 
-function hasPlanet(dateStr: string): boolean {
-  const rand = seededRand(strHash(dateStr + 'planet'))
-  return rand() < 0.28
-}
-
-function getPlanetColor(dateStr: string): string {
-  const rand = seededRand(strHash(dateStr + 'pcolor'))
+function getPlanetColor(dateStr: string, idx: number): string {
+  const rand = seededRand(strHash(dateStr + 'pcolor' + idx))
   const keys = Object.keys(CATEGORY_COLORS) as CategoryKey[]
   return CATEGORY_COLORS[keys[Math.floor(rand() * keys.length)]]
 }
 
-function getPlanetAngle(dateStr: string): number {
-  const rand = seededRand(strHash(dateStr + 'pangle'))
+function getPlanetAngle(dateStr: string, idx: number): number {
+  const rand = seededRand(strHash(dateStr + 'pangle' + idx))
   return rand() * Math.PI * 2
 }
 
-function getOrbitDuration(dateStr: string): number {
-  const rand = seededRand(strHash(dateStr + 'orbitdur'))
-  return 8 + rand() * 6 // 8–14s, varies per star
+function getOrbitDuration(dateStr: string, idx: number): number {
+  const rand = seededRand(strHash(dateStr + 'orbitdur' + idx))
+  return 8 + rand() * 6 // 8–14s, varies per planet
 }
 
 // ── Star colour (seeded per date) ──────────────────────────────────────────────
@@ -272,16 +278,7 @@ function getStarColor(dateStr: string): string {
 function RealisticStar({ cx, cy, type, dateStr, born }: {
   cx: number; cy: number; type: StarType; dateStr: string; born: boolean
 }) {
-  const planet = hasPlanet(dateStr)
-  const planetColor = getPlanetColor(dateStr)
-  const planetAngle = getPlanetAngle(dateStr)
-  const planetAngleDeg = (planetAngle * 180) / Math.PI
-  const planetDist = 26
-  // Base (unrotated) position — animateTransform below spins this around (cx,cy)
-  const px = cx + planetDist
-  const py = cy
-  const orbitDuration = getOrbitDuration(dateStr)
-
+  const planetCount = getPlanetCount(dateStr)
   const color = getStarColor(dateStr)
 
   const id = `glow-${dateStr.replace(/-/g, '')}`
@@ -324,40 +321,30 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
         </>
       )}
 
-      {type === 'binary' && (
-        <>
-          <circle cx={cx - 8} cy={cy} r={26} fill={`url(#${id})`} opacity="0.6" />
-          <circle cx={cx + 8} cy={cy} r={22} fill={`url(#${id2})`} opacity="0.4" />
-          <circle cx={cx - 8} cy={cy} r={5} fill="white" />
-          <circle cx={cx + 8} cy={cy} r={4} fill="white" opacity="0.85" />
-        </>
-      )}
-
-      {type === 'cluster' && (
-        <>
-          <circle cx={cx} cy={cy} r={32} fill={`url(#${id})`} />
-          <circle cx={cx} cy={cy - 9} r={3.5} fill="white" />
-          <circle cx={cx - 7} cy={cy + 6} r={3} fill="white" opacity="0.85" />
-          <circle cx={cx + 7} cy={cy + 6} r={2.5} fill="white" opacity="0.7" />
-        </>
-      )}
-
-      {/* Planet — small orbiting orb, clearly smaller than the star */}
-      {planet && (
-        <g>
-          <animateTransform
-            attributeName="transform"
-            type="rotate"
-            from={`${planetAngleDeg} ${cx} ${cy}`}
-            to={`${planetAngleDeg + 360} ${cx} ${cy}`}
-            dur={`${orbitDuration}s`}
-            repeatCount="indefinite"
-          />
-          <circle cx={px} cy={py} r={6} fill={planetColor} opacity="0.12" />
-          <circle cx={px} cy={py} r={3} fill={planetColor} opacity="0.9" />
-          <circle cx={px - 0.8} cy={py - 0.8} r={1.1} fill="white" opacity="0.4" />
-        </g>
-      )}
+      {/* Planets — small orbiting orbs, clearly smaller than the star, each on its own ring */}
+      {Array.from({ length: planetCount }, (_, idx) => {
+        const planetColor = getPlanetColor(dateStr, idx)
+        const planetAngleDeg = (getPlanetAngle(dateStr, idx) * 180) / Math.PI
+        const planetDist = 16 + idx * 8
+        const orbitDuration = getOrbitDuration(dateStr, idx)
+        const px = cx + planetDist
+        const py = cy
+        return (
+          <g key={idx}>
+            <animateTransform
+              attributeName="transform"
+              type="rotate"
+              from={`${planetAngleDeg} ${cx} ${cy}`}
+              to={`${planetAngleDeg + 360} ${cx} ${cy}`}
+              dur={`${orbitDuration}s`}
+              repeatCount="indefinite"
+            />
+            <circle cx={px} cy={py} r={6} fill={planetColor} opacity="0.12" />
+            <circle cx={px} cy={py} r={3} fill={planetColor} opacity="0.9" />
+            <circle cx={px - 0.8} cy={py - 0.8} r={1.1} fill="white" opacity="0.4" />
+          </g>
+        )
+      })}
     </g>
   )
 }
@@ -614,8 +601,8 @@ function WeekConstellation({
         const dk = dateKey(week[i])
         setHover(prev => {
           if (prev?.id === dk) return null // tap again to dismiss
-          const planet = hasPlanet(dk)
-          const title = `${getStarName(dk)}${planet ? ` · ${getPlanetName(dk)}` : ''}`
+          const planetNames = getPlanetNames(dk, getPlanetCount(dk))
+          const title = `${getStarName(dk)}${planetNames.length ? ` · ${planetNames.join(', ')}` : ''}`
           return { x: e.clientX - rect.left, y: e.clientY - rect.top, title, subtitle: formatDayLabel(dk), id: dk }
         })
         return
@@ -790,16 +777,11 @@ function UniversePanel({
                   <circle cx={cx} cy={cy} r={CLUSTER_R + 5}
                     fill="none" stroke="rgba(127,119,221,0.18)" strokeWidth="1" strokeDasharray="2 4" />
                 )}
-                {/* Bright stars — aligned days */}
+                {/* Bright stars — aligned days: exactly one dot per day */}
                 {alignedDays.map((d, di) => {
                   const idx = week.indexOf(d)
                   const [sx, sy] = clusterPositions[idx]
-                  return (
-                    <g key={`a${di}`}>
-                      <circle cx={sx} cy={sy} r={5} fill="white" opacity="0.07" />
-                      <circle cx={sx} cy={sy} r={1.8} fill="white" opacity="0.9" />
-                    </g>
-                  )
+                  return <circle key={`a${di}`} cx={sx} cy={sy} r={1.8} fill="white" opacity="0.9" />
                 })}
                 {/* Dim dots — partial days */}
                 {partialDays.map((d, di) => {
