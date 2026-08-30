@@ -10,6 +10,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useApp } from '../context/AppContext'
+import { dateKey } from '../lib/date'
 import type { CategoryKey } from '../types'
 
 const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
@@ -21,10 +22,6 @@ const CATEGORY_COLORS: Record<CategoryKey, string> = {
 }
 
 // ── Date helpers ───────────────────────────────────────────────────────────────
-
-function dateKey(d: Date) {
-  return d.toISOString().split('T')[0]
-}
 
 function isToday(d: Date): boolean {
   return dateKey(d) === dateKey(new Date())
@@ -264,6 +261,49 @@ function getOrbitDuration(dateStr: string, idx: number): number {
   return 8 + rand() * 6 // 8–14s, varies per planet
 }
 
+// Each planet has its own chance of a small moon orbiting it.
+function getHasMoon(dateStr: string, idx: number): boolean {
+  const rand = seededRand(strHash(dateStr + 'moon' + idx))
+  return rand() < 0.35
+}
+
+function getMoonAngle(dateStr: string, idx: number): number {
+  const rand = seededRand(strHash(dateStr + 'moonangle' + idx))
+  return rand() * Math.PI * 2
+}
+
+function getMoonOrbitDuration(dateStr: string, idx: number): number {
+  const rand = seededRand(strHash(dateStr + 'moondur' + idx))
+  return 2.5 + rand() * 2.5 // 2.5–5s — visibly faster than its planet's own orbit
+}
+
+// Every star has its own scale, so the field reads less uniform.
+function getStarScale(dateStr: string): number {
+  const rand = seededRand(strHash(dateStr + 'scale'))
+  return 0.8 + rand() * 0.6 // 0.8–1.4
+}
+
+// Every star gets 1–2 small asteroids on a slow, distant orbit.
+function getAsteroidCount(dateStr: string): number {
+  const rand = seededRand(strHash(dateStr + 'astcount'))
+  return rand() < 0.6 ? 1 : 2
+}
+
+function getAsteroidAngle(dateStr: string, idx: number): number {
+  const rand = seededRand(strHash(dateStr + 'astangle' + idx))
+  return rand() * Math.PI * 2
+}
+
+function getAsteroidOrbitDuration(dateStr: string, idx: number): number {
+  const rand = seededRand(strHash(dateStr + 'astdur' + idx))
+  return 22 + rand() * 18 // 22–40s — much slower than any planet
+}
+
+function getAsteroidSize(dateStr: string, idx: number): number {
+  const rand = seededRand(strHash(dateStr + 'astsize' + idx))
+  return 0.9 + rand() * 0.8
+}
+
 // ── Star colour (seeded per date) ──────────────────────────────────────────────
 
 const STAR_COLORS = ['#FFA94D', '#FF6B5E', '#6FA8FF', '#FFFFFF'] as const
@@ -280,6 +320,8 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
 }) {
   const planetCount = getPlanetCount(dateStr)
   const color = getStarColor(dateStr)
+  const scale = getStarScale(dateStr)
+  const asteroidCount = getAsteroidCount(dateStr)
 
   const id = `glow-${dateStr.replace(/-/g, '')}`
   const id2 = `glow2-${dateStr.replace(/-/g, '')}`
@@ -302,22 +344,22 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
 
       {type === 'diffraction' && (
         <>
-          <circle cx={cx} cy={cy} r={36} fill={`url(#${id})`} />
-          <line x1={cx - 44} y1={cy} x2={cx + 44} y2={cy} stroke="white" strokeWidth="0.8" opacity="0.35" />
-          <line x1={cx} y1={cy - 44} x2={cx} y2={cy + 44} stroke="white" strokeWidth="0.8" opacity="0.35" />
-          <line x1={cx - 28} y1={cy - 28} x2={cx + 28} y2={cy + 28} stroke="white" strokeWidth="0.5" opacity="0.18" />
-          <line x1={cx + 28} y1={cy - 28} x2={cx - 28} y2={cy + 28} stroke="white" strokeWidth="0.5" opacity="0.18" />
-          <circle cx={cx} cy={cy} r={8} fill={`url(#${id2})`} />
-          <circle cx={cx} cy={cy} r={4} fill="white" />
+          <circle cx={cx} cy={cy} r={36 * scale} fill={`url(#${id})`} />
+          <line x1={cx - 44 * scale} y1={cy} x2={cx + 44 * scale} y2={cy} stroke="white" strokeWidth="0.8" opacity="0.35" />
+          <line x1={cx} y1={cy - 44 * scale} x2={cx} y2={cy + 44 * scale} stroke="white" strokeWidth="0.8" opacity="0.35" />
+          <line x1={cx - 28 * scale} y1={cy - 28 * scale} x2={cx + 28 * scale} y2={cy + 28 * scale} stroke="white" strokeWidth="0.5" opacity="0.18" />
+          <line x1={cx + 28 * scale} y1={cy - 28 * scale} x2={cx - 28 * scale} y2={cy + 28 * scale} stroke="white" strokeWidth="0.5" opacity="0.18" />
+          <circle cx={cx} cy={cy} r={8 * scale} fill={`url(#${id2})`} />
+          <circle cx={cx} cy={cy} r={4 * scale} fill="white" />
         </>
       )}
 
       {type === 'giant' && (
         <>
-          <circle cx={cx} cy={cy} r={44} fill={`url(#${id})`} />
-          <circle cx={cx} cy={cy} r={16} fill="white" opacity="0.18" />
-          <circle cx={cx} cy={cy} r={9} fill={`url(#${id2})`} />
-          <circle cx={cx} cy={cy} r={5} fill="white" />
+          <circle cx={cx} cy={cy} r={44 * scale} fill={`url(#${id})`} />
+          <circle cx={cx} cy={cy} r={16 * scale} fill="white" opacity="0.18" />
+          <circle cx={cx} cy={cy} r={9 * scale} fill={`url(#${id2})`} />
+          <circle cx={cx} cy={cy} r={5 * scale} fill="white" />
         </>
       )}
 
@@ -325,10 +367,13 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
       {Array.from({ length: planetCount }, (_, idx) => {
         const planetColor = getPlanetColor(dateStr, idx)
         const planetAngleDeg = (getPlanetAngle(dateStr, idx) * 180) / Math.PI
-        const planetDist = 16 + idx * 8
+        const planetDist = (16 + idx * 8) * scale
         const orbitDuration = getOrbitDuration(dateStr, idx)
         const px = cx + planetDist
         const py = cy
+        const hasMoon = getHasMoon(dateStr, idx)
+        const moonAngleDeg = (getMoonAngle(dateStr, idx) * 180) / Math.PI
+        const moonDuration = getMoonOrbitDuration(dateStr, idx)
         return (
           <g key={idx}>
             <animateTransform
@@ -342,6 +387,42 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
             <circle cx={px} cy={py} r={6} fill={planetColor} opacity="0.12" />
             <circle cx={px} cy={py} r={3} fill={planetColor} opacity="0.9" />
             <circle cx={px - 0.8} cy={py - 0.8} r={1.1} fill="white" opacity="0.4" />
+            {hasMoon && (
+              <g>
+                <animateTransform
+                  attributeName="transform"
+                  type="rotate"
+                  from={`${moonAngleDeg} ${px} ${py}`}
+                  to={`${moonAngleDeg + 360} ${px} ${py}`}
+                  dur={`${moonDuration}s`}
+                  repeatCount="indefinite"
+                />
+                <circle cx={px + 4.5} cy={py} r={1} fill="white" opacity="0.55" />
+              </g>
+            )}
+          </g>
+        )
+      })}
+
+      {/* Asteroids — every star gets at least one, drifting on a slow, distant orbit */}
+      {Array.from({ length: asteroidCount }, (_, idx) => {
+        const angleDeg = (getAsteroidAngle(dateStr, idx) * 180) / Math.PI
+        const dist = (58 + idx * 12) * scale
+        const duration = getAsteroidOrbitDuration(dateStr, idx)
+        const size = getAsteroidSize(dateStr, idx)
+        const ax = cx + dist
+        const ay = cy
+        return (
+          <g key={`ast${idx}`}>
+            <animateTransform
+              attributeName="transform"
+              type="rotate"
+              from={`${angleDeg} ${cx} ${cy}`}
+              to={`${angleDeg + 360} ${cx} ${cy}`}
+              dur={`${duration}s`}
+              repeatCount="indefinite"
+            />
+            <circle cx={ax} cy={ay} r={size} fill="#9C9284" opacity="0.55" />
           </g>
         )
       })}
@@ -717,6 +798,47 @@ function scalePositionsToCluster(
   ])
 }
 
+// Ambient gas + far-field stars filling the empty space between clusters.
+// Fixed seed (not date-based) — this is pure atmosphere, not tied to any
+// day's data, so it should stay put rather than reshuffle with new weeks.
+const NEBULA_COLORS = ['#7F77DD', '#1D9E75', '#D85A30', '#6FA8FF'] as const
+
+function NebulaField() {
+  const rand = seededRand(strHash('triova-universe-nebula'))
+  const blobs = Array.from({ length: 5 }, () => ({
+    cx: rand() * UNI_W,
+    cy: rand() * UNI_H,
+    r: 40 + rand() * 55,
+    color: NEBULA_COLORS[Math.floor(rand() * NEBULA_COLORS.length)],
+    opacity: 0.05 + rand() * 0.06,
+  }))
+  const farStars = Array.from({ length: 36 }, () => ({
+    x: rand() * UNI_W,
+    y: rand() * UNI_H,
+    r: 0.3 + rand() * 0.5,
+    opacity: 0.12 + rand() * 0.28,
+  }))
+
+  return (
+    <g>
+      <defs>
+        {blobs.map((b, i) => (
+          <radialGradient key={i} id={`nebula-${i}`} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={b.color} stopOpacity={b.opacity} />
+            <stop offset="100%" stopColor={b.color} stopOpacity="0" />
+          </radialGradient>
+        ))}
+      </defs>
+      {blobs.map((b, i) => (
+        <circle key={i} cx={b.cx} cy={b.cy} r={b.r} fill={`url(#nebula-${i})`} />
+      ))}
+      {farStars.map((s, i) => (
+        <circle key={i} cx={s.x} cy={s.y} r={s.r} fill="white" opacity={s.opacity} />
+      ))}
+    </g>
+  )
+}
+
 function UniversePanel({
   weeks,
   days,
@@ -746,6 +868,7 @@ function UniversePanel({
       <div className="relative">
         <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0a0a14' }}>
           <svg viewBox={`0 0 ${UNI_W} ${UNI_H}`} className="w-full">
+          <NebulaField />
           {weeks.map((week, wi) => {
             const isCurrent = wi === weeks.length - 1
             const mondayStr = dateKey(week[0])
@@ -832,7 +955,7 @@ export default function Pulse() {
 
       {/* This week */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
           <p className="font-sans text-xs uppercase tracking-widest text-white/25">
             This week · {formatWeekRange(week)}
           </p>

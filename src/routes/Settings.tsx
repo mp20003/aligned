@@ -8,6 +8,7 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router'
 import { useApp } from '../context/AppContext'
+import { dateKey } from '../lib/date'
 import type { CategoryKey, AppData } from '../types'
 
 const ACCENT_TEXT: Record<CategoryKey, string> = {
@@ -56,7 +57,7 @@ export default function Settings() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `triova-backup-${new Date().toISOString().split('T')[0]}.json`
+    a.download = `triova-backup-${dateKey(new Date())}.json`
     a.click()
     URL.revokeObjectURL(url)
   }

@@ -13,10 +13,11 @@ import { useState } from 'react'
 import { useApp } from '../context/AppContext'
 import { getDailySuggestions, getPastWins } from '../data/suggestions'
 import WinCard, { ACCENT } from '../components/WinCard'
+import { dateKey } from '../lib/date'
 import type { CategoryKey, WinEntry } from '../types'
 
 function todayKey() {
-  return new Date().toISOString().split('T')[0]
+  return dateKey(new Date())
 }
 
 function formatDateLabel(dateStr: string): string {

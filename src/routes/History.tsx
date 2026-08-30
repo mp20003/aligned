@@ -12,6 +12,7 @@ import { useState, useRef } from 'react'
 import { useApp } from '../context/AppContext'
 import { getDailySuggestions, getPastWins } from '../data/suggestions'
 import WinCard from '../components/WinCard'
+import { dateKey } from '../lib/date'
 import type { CategoryKey, DayEntry } from '../types'
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
@@ -71,10 +72,6 @@ function generateInsight(
   if (catCounts[strongest] === catCounts[weakest])
     return `Your three practices are moving in balance. Keep going.`
   return `Your ${labels[strongest].label.toLowerCase()} is your most consistent practice right now.`
-}
-
-function dateKey(d: Date) {
-  return d.toISOString().split('T')[0]
 }
 
 function getLast30Days(): Date[] {
