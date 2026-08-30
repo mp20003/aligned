@@ -101,14 +101,16 @@ function getWins(
   return CATEGORIES.filter(k => entry[k] !== null).length
 }
 
-// ── Star positions (deterministic per week) ────────────────────────────────────
+// ── Star positions ─────────────────────────────────────────────────────────────
+// This-week panel: zoomed-in viewBox so stars render large with full detail.
+// Universe clusters: same relative positions, scaled down to CLUSTER_R.
 
-const SVG_W = 340
-const SVG_H = 280
+const SVG_W = 220
+const SVG_H = 200
 
 function getStarPositions(mondayStr: string): [number, number][] {
   const rand = seededRand(strHash(mondayStr))
-  const padding = 36
+  const padding = 32
   const positions: [number, number][] = []
   let attempts = 0
   while (positions.length < 7 && attempts < 300) {
@@ -117,7 +119,7 @@ function getStarPositions(mondayStr: string): [number, number][] {
     const y = padding + rand() * (SVG_H - padding * 2)
     const tooClose = positions.some(([px, py]) => {
       const dx = px - x, dy = py - y
-      return Math.sqrt(dx * dx + dy * dy) < 52
+      return Math.sqrt(dx * dx + dy * dy) < 44
     })
     if (!tooClose) positions.push([x, y])
   }
@@ -164,7 +166,7 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
   const planet = hasPlanet(dateStr)
   const planetColor = getPlanetColor(dateStr)
   const planetAngle = getPlanetAngle(dateStr)
-  const planetDist = 18
+  const planetDist = 26
   const px = cx + Math.cos(planetAngle) * planetDist
   const py = cy + Math.sin(planetAngle) * planetDist
 
@@ -189,49 +191,50 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
 
       {type === 'diffraction' && (
         <>
-          {/* Outer glow */}
-          <circle cx={cx} cy={cy} r={22} fill={`url(#${id})`} />
-          {/* Diffraction spikes */}
-          <line x1={cx - 28} y1={cy} x2={cx + 28} y2={cy} stroke="white" strokeWidth="0.6" opacity="0.35" />
-          <line x1={cx} y1={cy - 28} x2={cx} y2={cy + 28} stroke="white" strokeWidth="0.6" opacity="0.35" />
-          <line x1={cx - 18} y1={cy - 18} x2={cx + 18} y2={cy + 18} stroke="white" strokeWidth="0.4" opacity="0.18" />
-          <line x1={cx + 18} y1={cy - 18} x2={cx - 18} y2={cy + 18} stroke="white" strokeWidth="0.4" opacity="0.18" />
-          {/* Core */}
-          <circle cx={cx} cy={cy} r={5} fill={`url(#${id2})`} />
-          <circle cx={cx} cy={cy} r={2.5} fill="white" />
+          <circle cx={cx} cy={cy} r={36} fill={`url(#${id})`} />
+          <line x1={cx - 44} y1={cy} x2={cx + 44} y2={cy} stroke="white" strokeWidth="0.8" opacity="0.35" />
+          <line x1={cx} y1={cy - 44} x2={cx} y2={cy + 44} stroke="white" strokeWidth="0.8" opacity="0.35" />
+          <line x1={cx - 28} y1={cy - 28} x2={cx + 28} y2={cy + 28} stroke="white" strokeWidth="0.5" opacity="0.18" />
+          <line x1={cx + 28} y1={cy - 28} x2={cx - 28} y2={cy + 28} stroke="white" strokeWidth="0.5" opacity="0.18" />
+          <circle cx={cx} cy={cy} r={8} fill={`url(#${id2})`} />
+          <circle cx={cx} cy={cy} r={4} fill="white" />
         </>
       )}
 
       {type === 'giant' && (
         <>
-          <circle cx={cx} cy={cy} r={30} fill={`url(#${id})`} />
-          <circle cx={cx} cy={cy} r={10} fill="white" opacity="0.2" />
-          <circle cx={cx} cy={cy} r={6} fill={`url(#${id2})`} />
-          <circle cx={cx} cy={cy} r={3} fill="white" />
+          <circle cx={cx} cy={cy} r={44} fill={`url(#${id})`} />
+          <circle cx={cx} cy={cy} r={16} fill="white" opacity="0.18" />
+          <circle cx={cx} cy={cy} r={9} fill={`url(#${id2})`} />
+          <circle cx={cx} cy={cy} r={5} fill="white" />
         </>
       )}
 
       {type === 'binary' && (
         <>
-          <circle cx={cx - 5} cy={cy} r={18} fill={`url(#${id})`} opacity="0.6" />
-          <circle cx={cx + 5} cy={cy} r={16} fill={`url(#${id2})`} opacity="0.4" />
-          <circle cx={cx - 5} cy={cy} r={3} fill="white" />
-          <circle cx={cx + 5} cy={cy} r={2.5} fill="white" opacity="0.85" />
+          <circle cx={cx - 8} cy={cy} r={26} fill={`url(#${id})`} opacity="0.6" />
+          <circle cx={cx + 8} cy={cy} r={22} fill={`url(#${id2})`} opacity="0.4" />
+          <circle cx={cx - 8} cy={cy} r={5} fill="white" />
+          <circle cx={cx + 8} cy={cy} r={4} fill="white" opacity="0.85" />
         </>
       )}
 
       {type === 'cluster' && (
         <>
-          <circle cx={cx} cy={cy} r={20} fill={`url(#${id})`} />
-          <circle cx={cx} cy={cy - 6} r={2} fill="white" />
-          <circle cx={cx - 5} cy={cy + 4} r={1.8} fill="white" opacity="0.85" />
-          <circle cx={cx + 5} cy={cy + 4} r={1.5} fill="white" opacity="0.7" />
+          <circle cx={cx} cy={cy} r={32} fill={`url(#${id})`} />
+          <circle cx={cx} cy={cy - 9} r={3.5} fill="white" />
+          <circle cx={cx - 7} cy={cy + 6} r={3} fill="white" opacity="0.85" />
+          <circle cx={cx + 7} cy={cy + 6} r={2.5} fill="white" opacity="0.7" />
         </>
       )}
 
-      {/* Planet */}
+      {/* Planet — clearly visible coloured orb */}
       {planet && (
-        <circle cx={px} cy={py} r={3.2} fill={planetColor} opacity="0.9" />
+        <g>
+          <circle cx={px} cy={py} r={10} fill={planetColor} opacity="0.12" />
+          <circle cx={px} cy={py} r={5.5} fill={planetColor} opacity="0.9" />
+          <circle cx={px - 1.5} cy={py - 1.5} r={2} fill="white" opacity="0.4" />
+        </g>
       )}
     </g>
   )
@@ -524,31 +527,34 @@ function WeekConstellation({
   )
 }
 
-// ── Universe panel (Option B — symbolic clusters) ──────────────────────────────
+// ── Universe panel ─────────────────────────────────────────────────────────────
+// Past weeks only — each week is a small cluster at a seeded position.
+// Star positions within each cluster are scaled-down versions of the full
+// week's star layout, so each cluster has a unique shape.
 
 const UNI_W = 340
-const UNI_H = 260
-const CLUSTER_R = 22
+const UNI_H = 280
+const CLUSTER_R = 24
 
-function getClusterCenters(count: number): [number, number][] {
-  const rand = seededRand(9999)
-  const padding = 32
-  const centers: [number, number][] = []
-  let attempts = 0
-  while (centers.length < count && attempts < 3000) {
-    attempts++
-    const x = padding + rand() * (UNI_W - padding * 2)
-    const y = padding + rand() * (UNI_H - padding * 2)
-    const tooClose = centers.some(([px, py]) => {
-      const dx = px - x, dy = py - y
-      return Math.sqrt(dx * dx + dy * dy) < CLUSTER_R * 2.6
-    })
-    if (!tooClose) centers.push([x, y])
-  }
-  while (centers.length < count) {
-    centers.push([padding + rand() * (UNI_W - padding * 2), padding + rand() * (UNI_H - padding * 2)])
-  }
-  return centers
+function getClusterCenter(mondayStr: string, W: number, H: number, padding: number): [number, number] {
+  const rand = seededRand(strHash(mondayStr + 'center'))
+  return [
+    padding + rand() * (W - padding * 2),
+    padding + rand() * (H - padding * 2),
+  ]
+}
+
+// Scale a week's full star positions down into a cluster of radius r around cx,cy
+function scalePositionsToCluster(
+  positions: [number, number][],
+  cx: number, cy: number, r: number
+): [number, number][] {
+  const midX = SVG_W / 2, midY = SVG_H / 2
+  const scale = (r * 0.85) / Math.max(SVG_W, SVG_H) * 2
+  return positions.map(([x, y]) => [
+    cx + (x - midX) * scale,
+    cy + (y - midY) * scale,
+  ])
 }
 
 function UniversePanel({
@@ -558,17 +564,23 @@ function UniversePanel({
   weeks: Date[][]
   days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown } | null>
 }) {
-  const centers = getClusterCenters(weeks.length)
+  // Only show past weeks (not current)
+  const pastWeeks = weeks.slice(0, -1)
+  const padding = 36
 
   return (
     <div className="flex flex-col gap-3">
       <p className="font-sans text-xs uppercase tracking-widest text-white/25">Your universe</p>
       <div className="rounded-2xl overflow-hidden" style={{ background: '#0a0a14' }}>
         <svg viewBox={`0 0 ${UNI_W} ${UNI_H}`} className="w-full">
-          {weeks.map((week, wi) => {
-            const [cx, cy] = centers[wi]
-            const isCurrent = wi === weeks.length - 1
-            const rand = seededRand(strHash(dateKey(week[0]) + 'uni'))
+          {pastWeeks.map((week, wi) => {
+            const mondayStr = dateKey(week[0])
+            const [cx, cy] = getClusterCenter(mondayStr, UNI_W, UNI_H, padding)
+            const rand = seededRand(strHash(mondayStr + 'uni'))
+
+            // Use scaled-down positions for cluster shape variety
+            const fullPositions = getStarPositions(mondayStr)
+            const clusterPositions = scalePositionsToCluster(fullPositions, cx, cy, CLUSTER_R)
 
             const pastDays = week.filter(d => !isFuture(d) && !isToday(d))
             const alignedDays = pastDays.filter(d => getWins(days, dateKey(d)) === 3)
@@ -576,18 +588,18 @@ function UniversePanel({
             const deadDays = pastDays.filter(d => getWins(days, dateKey(d)) === 0 && days[dateKey(d)] !== undefined)
 
             if (alignedDays.length === 0 && partialDays.length === 0 && deadDays.length === 0) {
-              // No data at all — invisible
               return <g key={wi} />
             }
 
+            // Map each day to its cluster position
+            const dayIndices = pastDays.map(d => week.indexOf(d))
+
             return (
-              <g key={wi} className={isCurrent ? 'star-drift' : ''} style={{ animationDelay: `${wi * 0.2}s` }}>
+              <g key={wi}>
                 {/* Bright stars — aligned days */}
-                {alignedDays.map((_, di) => {
-                  const angle = rand() * Math.PI * 2
-                  const dist = rand() * CLUSTER_R * 0.85
-                  const sx = cx + Math.cos(angle) * dist
-                  const sy = cy + Math.sin(angle) * dist
+                {alignedDays.map((d, di) => {
+                  const idx = dayIndices[pastDays.indexOf(d)]
+                  const [sx, sy] = idx >= 0 ? clusterPositions[idx] : [cx + (rand() - 0.5) * CLUSTER_R, cy + (rand() - 0.5) * CLUSTER_R]
                   return (
                     <g key={`a${di}`}>
                       <circle cx={sx} cy={sy} r={5} fill="white" opacity="0.07" />
@@ -596,25 +608,17 @@ function UniversePanel({
                   )
                 })}
                 {/* Dim dots — partial days */}
-                {partialDays.map((_, di) => {
-                  const angle = rand() * Math.PI * 2
-                  const dist = rand() * CLUSTER_R * 0.85
-                  const sx = cx + Math.cos(angle) * dist
-                  const sy = cy + Math.sin(angle) * dist
+                {partialDays.map((d, di) => {
+                  const idx = dayIndices[pastDays.indexOf(d)]
+                  const [sx, sy] = idx >= 0 ? clusterPositions[idx] : [cx + (rand() - 0.5) * CLUSTER_R, cy + (rand() - 0.5) * CLUSTER_R]
                   return <circle key={`p${di}`} cx={sx} cy={sy} r={1} fill="white" opacity="0.2" />
                 })}
                 {/* Dead stars — fully missed days (dust specks) */}
-                {deadDays.map((_, di) => {
-                  const angle = rand() * Math.PI * 2
-                  const dist = rand() * CLUSTER_R * 0.85
-                  const sx = cx + Math.cos(angle) * dist
-                  const sy = cy + Math.sin(angle) * dist
+                {deadDays.map((d, di) => {
+                  const idx = dayIndices[pastDays.indexOf(d)]
+                  const [sx, sy] = idx >= 0 ? clusterPositions[idx] : [cx + (rand() - 0.5) * CLUSTER_R, cy + (rand() - 0.5) * CLUSTER_R]
                   return <circle key={`d${di}`} cx={sx} cy={sy} r={1.2} fill="#D85A30" opacity="0.35" />
                 })}
-                {isCurrent && (
-                  <circle cx={cx} cy={cy} r={CLUSTER_R + 4}
-                    fill="none" stroke="rgba(127,119,221,0.2)" strokeWidth="1" strokeDasharray="3 5" />
-                )}
               </g>
             )
           })}
