@@ -8,7 +8,7 @@
  * Universe panel: symbolic clusters — one per week, brightness = aligned days.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useApp } from '../context/AppContext'
 import type { CategoryKey } from '../types'
 
@@ -171,6 +171,30 @@ function getClusterName(mondayStr: string): string {
   return `${adj} ${noun}`
 }
 
+// ── Hover tooltip (custom-styled, matches app aesthetic) ───────────────────────
+
+type HoverInfo = { x: number; y: number; title: string; subtitle: string }
+
+function HoverCard({ x, y, title, subtitle }: HoverInfo) {
+  return (
+    <div
+      className="pointer-events-none absolute z-20 flex flex-col gap-0.5 px-3 py-2 rounded-xl"
+      style={{
+        left: x,
+        top: y,
+        transform: 'translate(-50%, -122%)',
+        background: 'rgba(15,15,26,0.96)',
+        border: '1px solid rgba(255,255,255,0.12)',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
+        width: 'max-content',
+      }}
+    >
+      <span className="font-serif text-sm text-white whitespace-nowrap">{title}</span>
+      <span className="font-sans text-[10px] uppercase tracking-widest text-white/35 whitespace-nowrap">{subtitle}</span>
+    </div>
+  )
+}
+
 // ── Star positions ─────────────────────────────────────────────────────────────
 // This-week panel: zoomed-in viewBox so stars render large with full detail.
 // Universe clusters: same relative positions, scaled down to CLUSTER_R.
@@ -244,8 +268,10 @@ function getStarColor(dateStr: string): string {
 
 // ── Realistic star SVG ─────────────────────────────────────────────────────────
 
-function RealisticStar({ cx, cy, type, dateStr, born }: {
+function RealisticStar({ cx, cy, type, dateStr, born, onHover, onLeave }: {
   cx: number; cy: number; type: StarType; dateStr: string; born: boolean
+  onHover?: (e: React.MouseEvent) => void
+  onLeave?: () => void
 }) {
   const planet = hasPlanet(dateStr)
   const planetColor = getPlanetColor(dateStr)
@@ -258,8 +284,6 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
   const orbitDuration = getOrbitDuration(dateStr)
 
   const color = getStarColor(dateStr)
-  const starName = getStarName(dateStr)
-  const planetName = getPlanetName(dateStr)
 
   const id = `glow-${dateStr.replace(/-/g, '')}`
   const id2 = `glow2-${dateStr.replace(/-/g, '')}`
@@ -268,11 +292,13 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
 
   return (
     <g className={starClass} style={{ transformOrigin: `${cx}px ${cy}px` }}>
-      <title>
-        {`${formatDayLabel(dateStr)} — ${starName}${planet ? ` · ${planetName}` : ''}`}
-      </title>
-      {/* Invisible hit area — hover anywhere near the star (and its orbiting planet) */}
-      <circle cx={cx} cy={cy} r={40} fill="transparent" style={{ cursor: 'default' }} />
+      {/* Invisible hit area, sized to stay clear of neighbouring stars (min spacing 44) */}
+      <circle
+        cx={cx} cy={cy} r={20} fill="transparent" pointerEvents="all"
+        style={{ cursor: 'default' }}
+        onMouseEnter={onHover}
+        onMouseLeave={onLeave}
+      />
       <defs>
         <radialGradient id={id} cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor={color} stopOpacity="0.9" />
@@ -492,6 +518,16 @@ function WeekConstellation({
 }) {
   const mondayStr = dateKey(week[0])
   const positions = getStarPositions(mondayStr)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [hover, setHover] = useState<HoverInfo | null>(null)
+
+  function handleStarHover(e: React.MouseEvent, dk: string) {
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const planet = hasPlanet(dk)
+    const title = `${getStarName(dk)}${planet ? ` · ${getPlanetName(dk)}` : ''}`
+    setHover({ x: e.clientX - rect.left, y: e.clientY - rect.top, title, subtitle: formatDayLabel(dk) })
+  }
 
   const [exploding, setExploding] = useState<ExplodingDay[]>([])
   const [dusts, setDusts] = useState<Set<string>>(() => {
@@ -576,57 +612,64 @@ function WeekConstellation({
   })
 
   return (
-    <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }}>
-      {/* Constellation lines */}
-      {fullStarIndices.slice(0, -1).map((i, idx) => {
-        const j = fullStarIndices[idx + 1]
-        const [x1, y1] = positions[i]
-        const [x2, y2] = positions[j]
-        return <line key={`${i}-${j}`} x1={x1} y1={y1} x2={x2} y2={y2}
-          stroke="white" strokeWidth="0.5" opacity="0.12" />
-      })}
+    <div className="relative">
+      <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0d0d1e' }}>
+        <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }}>
+          {/* Constellation lines */}
+          {fullStarIndices.slice(0, -1).map((i, idx) => {
+            const j = fullStarIndices[idx + 1]
+            const [x1, y1] = positions[i]
+            const [x2, y2] = positions[j]
+            return <line key={`${i}-${j}`} x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke="white" strokeWidth="0.5" opacity="0.12" />
+          })}
 
-      {/* Stars, comets, dust */}
-      {week.map((d, i) => {
-        const dk = dateKey(d)
-        const [cx, cy] = positions[i]
+          {/* Stars, comets, dust */}
+          {week.map((d, i) => {
+            const dk = dateKey(d)
+            const [cx, cy] = positions[i]
 
-        if (isFuture(d) || isToday(d)) return null
-        if (isExplodingSet.has(dk)) return null
+            if (isFuture(d) || isToday(d)) return null
+            if (isExplodingSet.has(dk)) return null
 
-        if (dusts.has(dk)) {
-          return <DustRemnant key={dk} cx={cx} cy={cy} dateStr={dk} />
-        }
+            if (dusts.has(dk)) {
+              return <DustRemnant key={dk} cx={cx} cy={cy} dateStr={dk} />
+            }
 
-        const wins = getWins(days, dk)
-        if (wins === 3) {
-          return (
-            <RealisticStar
-              key={dk}
-              cx={cx} cy={cy}
-              type={getStarType(dk)}
-              dateStr={dk}
-              born={false}
-            />
-          )
-        }
-        if (wins > 0) {
-          return <Comet key={dk} cx={cx} cy={cy} dateStr={dk} />
-        }
-        return null
-      })}
+            const wins = getWins(days, dk)
+            if (wins === 3) {
+              return (
+                <RealisticStar
+                  key={dk}
+                  cx={cx} cy={cy}
+                  type={getStarType(dk)}
+                  dateStr={dk}
+                  born={false}
+                  onHover={(e) => handleStarHover(e, dk)}
+                  onLeave={() => setHover(null)}
+                />
+              )
+            }
+            if (wins > 0) {
+              return <Comet key={dk} cx={cx} cy={cy} dateStr={dk} />
+            }
+            return null
+          })}
 
-      {/* Explosion animations */}
-      {exploding.map(e => (
-        <ExplosionParticles key={e.dateStr} cx={e.cx} cy={e.cy}
-          onDone={() => handleExplosionDone(e.dateStr)} />
-      ))}
+          {/* Explosion animations */}
+          {exploding.map(e => (
+            <ExplosionParticles key={e.dateStr} cx={e.cx} cy={e.cy}
+              onDone={() => handleExplosionDone(e.dateStr)} />
+          ))}
 
-      {/* Nova burst overlaid on top of star */}
-      {activeNova && (
-        <NovaBurst key={activeNova.dateStr} cx={activeNova.cx} cy={activeNova.cy} onDone={handleNovaDone} />
-      )}
-    </svg>
+          {/* Nova burst overlaid on top of star */}
+          {activeNova && (
+            <NovaBurst key={activeNova.dateStr} cx={activeNova.cx} cy={activeNova.cy} onDone={handleNovaDone} />
+          )}
+        </svg>
+      </div>
+      {hover && <HoverCard {...hover} />}
+    </div>
   )
 }
 
@@ -639,12 +682,27 @@ const UNI_W = 340
 const UNI_H = 280
 const CLUSTER_R = 24
 
-function getClusterCenter(mondayStr: string, W: number, H: number, padding: number): [number, number] {
-  const rand = seededRand(strHash(mondayStr + 'center'))
-  return [
-    padding + rand() * (W - padding * 2),
-    padding + rand() * (H - padding * 2),
-  ]
+// Places every week's cluster center, seeded per-week but nudged apart so no
+// two clusters (or their hover hit-areas) ever overlap — a prior version placed
+// each independently and could land two clusters on top of each other.
+function getClusterCenters(weeks: Date[][], W: number, H: number, padding: number): [number, number][] {
+  const minDist = 56
+  const positions: [number, number][] = []
+  weeks.forEach(week => {
+    const mondayStr = dateKey(week[0])
+    const rand = seededRand(strHash(mondayStr + 'center'))
+    let x = padding, y = padding, attempts = 0
+    do {
+      x = padding + rand() * (W - padding * 2)
+      y = padding + rand() * (H - padding * 2)
+      attempts++
+    } while (
+      attempts < 60 &&
+      positions.some(([px, py]) => Math.hypot(px - x, py - y) < minDist)
+    )
+    positions.push([x, y])
+  })
+  return positions
 }
 
 // Scale a week's full star positions down into a cluster of radius r around cx,cy
@@ -668,16 +726,31 @@ function UniversePanel({
   days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown } | null>
 }) {
   const padding = 36
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [hover, setHover] = useState<HoverInfo | null>(null)
+  const centers = getClusterCenters(weeks, UNI_W, UNI_H, padding)
+
+  function handleClusterHover(e: React.MouseEvent, mondayStr: string, week: Date[]) {
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setHover({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+      title: getClusterName(mondayStr),
+      subtitle: formatWeekRange(week),
+    })
+  }
 
   return (
     <div className="flex flex-col gap-3">
       <p className="font-sans text-xs uppercase tracking-widest text-white/25">Your universe</p>
-      <div className="rounded-2xl overflow-hidden" style={{ background: '#0a0a14' }}>
-        <svg viewBox={`0 0 ${UNI_W} ${UNI_H}`} className="w-full">
+      <div className="relative">
+        <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0a0a14' }}>
+          <svg viewBox={`0 0 ${UNI_W} ${UNI_H}`} className="w-full">
           {weeks.map((week, wi) => {
             const isCurrent = wi === weeks.length - 1
             const mondayStr = dateKey(week[0])
-            const [cx, cy] = getClusterCenter(mondayStr, UNI_W, UNI_H, padding)
+            const [cx, cy] = centers[wi]
 
             // Use scaled-down positions for cluster shape variety
             const fullPositions = getStarPositions(mondayStr)
@@ -693,9 +766,13 @@ function UniversePanel({
 
             return (
               <g key={wi}>
-                <title>{`${getClusterName(mondayStr)} — ${formatWeekRange(week)}`}</title>
-                {/* Invisible hit area — hover anywhere near the cluster to see its week */}
-                <circle cx={cx} cy={cy} r={CLUSTER_R + 8} fill="transparent" style={{ cursor: 'default' }} />
+                {/* Invisible hit area, sized to stay clear of neighbouring clusters (min spacing 56) */}
+                <circle
+                  cx={cx} cy={cy} r={CLUSTER_R} fill="transparent" pointerEvents="all"
+                  style={{ cursor: 'default' }}
+                  onMouseEnter={(e) => handleClusterHover(e, mondayStr, week)}
+                  onMouseLeave={() => setHover(null)}
+                />
                 {/* Soft glow ring for current week — marks where it's forming */}
                 {isCurrent && (
                   <circle cx={cx} cy={cy} r={CLUSTER_R + 5}
@@ -727,7 +804,9 @@ function UniversePanel({
               </g>
             )
           })}
-        </svg>
+          </svg>
+        </div>
+        {hover && <HoverCard {...hover} />}
       </div>
     </div>
   )
@@ -768,9 +847,7 @@ export default function Pulse() {
           </p>
         </div>
 
-        <div className="rounded-2xl overflow-hidden" style={{ background: '#0d0d1e' }}>
-          <WeekConstellation week={week} days={data.days} />
-        </div>
+        <WeekConstellation week={week} days={data.days} />
 
         {todayWins < 3 && (
           <p className="font-serif text-sm text-white/30 italic text-center">
