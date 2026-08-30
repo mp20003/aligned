@@ -269,9 +269,8 @@ function getStarColor(dateStr: string): string {
 
 // ── Realistic star SVG ─────────────────────────────────────────────────────────
 
-function RealisticStar({ cx, cy, type, dateStr, born, onSelect }: {
+function RealisticStar({ cx, cy, type, dateStr, born }: {
   cx: number; cy: number; type: StarType; dateStr: string; born: boolean
-  onSelect?: (e: React.MouseEvent) => void
 }) {
   const planet = hasPlanet(dateStr)
   const planetColor = getPlanetColor(dateStr)
@@ -291,19 +290,7 @@ function RealisticStar({ cx, cy, type, dateStr, born, onSelect }: {
   const starClass = born ? 'star-born' : 'star-full'
 
   return (
-    <>
-      {/*
-        Hit area lives OUTSIDE the twinkling group below: that group has a
-        continuous CSS transform animation (star-twinkle), and animated SVG
-        transforms are unreliable click/tap targets on some mobile browsers.
-        Keeping this circle static guarantees it's always tappable.
-      */}
-      <circle
-        cx={cx} cy={cy} r={20} fill="transparent" pointerEvents="all"
-        style={{ cursor: 'pointer' }}
-        onClick={onSelect}
-      />
-      <g className={starClass} style={{ transformOrigin: `${cx}px ${cy}px`, pointerEvents: 'none' }}>
+    <g className={starClass} style={{ transformOrigin: `${cx}px ${cy}px` }}>
       <defs>
         <radialGradient id={id} cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor={color} stopOpacity="0.9" />
@@ -371,8 +358,7 @@ function RealisticStar({ cx, cy, type, dateStr, born, onSelect }: {
           <circle cx={px - 0.8} cy={py - 0.8} r={1.1} fill="white" opacity="0.4" />
         </g>
       )}
-      </g>
-    </>
+    </g>
   )
 }
 
@@ -527,19 +513,6 @@ function WeekConstellation({
   const containerRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<HoverInfo | null>(null)
 
-  // Tap a star to see its name/date (not hover — this is the primary view on mobile)
-  function handleStarSelect(e: React.MouseEvent, dk: string) {
-    e.stopPropagation()
-    setHover(prev => {
-      if (prev?.id === dk) return null // tap again to dismiss
-      const rect = containerRef.current?.getBoundingClientRect()
-      if (!rect) return prev
-      const planet = hasPlanet(dk)
-      const title = `${getStarName(dk)}${planet ? ` · ${getPlanetName(dk)}` : ''}`
-      return { x: e.clientX - rect.left, y: e.clientY - rect.top, title, subtitle: formatDayLabel(dk), id: dk }
-    })
-  }
-
   const [exploding, setExploding] = useState<ExplodingDay[]>([])
   const [dusts, setDusts] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('triova-dusts') ?? '[]')) }
@@ -614,6 +587,7 @@ function WeekConstellation({
   const isExplodingSet = new Set(exploding.map(e => e.dateStr))
 
   // Constellation lines between full stars (today included once it's aligned)
+  // Also doubles as the list of tappable stars — see handlePanelTap below.
   const fullStarIndices: number[] = []
   week.forEach((d, i) => {
     if (isFuture(d)) return
@@ -623,8 +597,35 @@ function WeekConstellation({
     }
   })
 
+  // Single tap handler for the whole panel: finds the nearest rendered star (by
+  // simple distance, in viewBox space) instead of relying on tiny per-star SVG
+  // hit targets, which are unreliable on some mobile browsers — especially
+  // layered under a continuously-animated (twinkling) group.
+  function handlePanelTap(e: React.MouseEvent<HTMLDivElement>) {
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect || rect.width === 0) { setHover(null); return }
+    const scale = SVG_W / rect.width
+    const tapX = (e.clientX - rect.left) * scale
+    const tapY = (e.clientY - rect.top) * scale
+
+    for (const i of fullStarIndices) {
+      const [sx, sy] = positions[i]
+      if (Math.hypot(sx - tapX, sy - tapY) <= 26) {
+        const dk = dateKey(week[i])
+        setHover(prev => {
+          if (prev?.id === dk) return null // tap again to dismiss
+          const planet = hasPlanet(dk)
+          const title = `${getStarName(dk)}${planet ? ` · ${getPlanetName(dk)}` : ''}`
+          return { x: e.clientX - rect.left, y: e.clientY - rect.top, title, subtitle: formatDayLabel(dk), id: dk }
+        })
+        return
+      }
+    }
+    setHover(null)
+  }
+
   return (
-    <div className="relative" onClick={() => setHover(null)}>
+    <div className="relative" onClick={handlePanelTap}>
       <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0d0d1e' }}>
         <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }}>
           {/* Constellation lines */}
@@ -658,7 +659,6 @@ function WeekConstellation({
                   type={getStarType(dk)}
                   dateStr={dk}
                   born={false}
-                  onSelect={(e) => handleStarSelect(e, dk)}
                 />
               )
             }
@@ -781,7 +781,7 @@ function UniversePanel({
                 {/* Invisible hit area, sized to stay clear of neighbouring clusters (min spacing 56) */}
                 <circle
                   cx={cx} cy={cy} r={CLUSTER_R} fill="transparent" pointerEvents="all"
-                  style={{ cursor: 'default' }}
+                  style={{ cursor: 'default', touchAction: 'manipulation' }}
                   onMouseEnter={(e) => handleClusterHover(e, mondayStr, week)}
                   onMouseLeave={() => setHover(null)}
                 />
