@@ -131,6 +131,46 @@ function formatWeekRange(week: Date[]): string {
   return `${week[0].toLocaleDateString('en-US', opts)} – ${week[6].toLocaleDateString('en-US', opts)}`
 }
 
+function formatDayLabel(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00')
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+// ── Procedural space names (seeded per date / week) ────────────────────────────
+
+const STAR_NAME_PARTS = [
+  'Vantor', 'Kepler', 'Astra', 'Lyrae', 'Corvid', 'Thessia', 'Nyxara', 'Caelum',
+  'Solari', 'Helion', 'Draconis', 'Vela', 'Orinth', 'Lumen', 'Sabrix', 'Halvern',
+  'Ekaris', 'Novara', 'Ithal', 'Quorin', 'Perael', 'Sundrel', 'Wrenna', 'Talvos',
+]
+
+function getStarName(dateStr: string): string {
+  const rand = seededRand(strHash(dateStr + 'starname'))
+  const part = STAR_NAME_PARTS[Math.floor(rand() * STAR_NAME_PARTS.length)]
+  const num = 100 + Math.floor(rand() * 900)
+  return `${part}-${num}`
+}
+
+function getPlanetName(dateStr: string): string {
+  return `${getStarName(dateStr)} b`
+}
+
+const CLUSTER_ADJ = [
+  'Ember', 'Halcyon', 'Wandering', 'Silent', 'Gilded', 'Hollow', 'Drifting',
+  'Faded', 'Velvet', 'Amber', 'Frozen', 'Distant', 'Quiet', 'Luminous', 'Restless',
+]
+const CLUSTER_NOUN = [
+  'Expanse', 'Drift', 'Cluster', 'Nebula', 'Reach', 'Veil', 'Basin', 'Field',
+  'Belt', 'Hollow', 'Current', 'Span', 'Deep', 'Cradle', 'Wake',
+]
+
+function getClusterName(mondayStr: string): string {
+  const rand = seededRand(strHash(mondayStr + 'clustername'))
+  const adj = CLUSTER_ADJ[Math.floor(rand() * CLUSTER_ADJ.length)]
+  const noun = CLUSTER_NOUN[Math.floor(rand() * CLUSTER_NOUN.length)]
+  return `${adj} ${noun}`
+}
+
 // ── Star positions ─────────────────────────────────────────────────────────────
 // This-week panel: zoomed-in viewBox so stars render large with full detail.
 // Universe clusters: same relative positions, scaled down to CLUSTER_R.
@@ -218,6 +258,8 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
   const orbitDuration = getOrbitDuration(dateStr)
 
   const color = getStarColor(dateStr)
+  const starName = getStarName(dateStr)
+  const planetName = getPlanetName(dateStr)
 
   const id = `glow-${dateStr.replace(/-/g, '')}`
   const id2 = `glow2-${dateStr.replace(/-/g, '')}`
@@ -226,6 +268,11 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
 
   return (
     <g className={starClass} style={{ transformOrigin: `${cx}px ${cy}px` }}>
+      <title>
+        {`${formatDayLabel(dateStr)} — ${starName}${planet ? ` · ${planetName}` : ''}`}
+      </title>
+      {/* Invisible hit area — hover anywhere near the star (and its orbiting planet) */}
+      <circle cx={cx} cy={cy} r={40} fill="transparent" style={{ cursor: 'default' }} />
       <defs>
         <radialGradient id={id} cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor={color} stopOpacity="0.9" />
@@ -646,7 +693,7 @@ function UniversePanel({
 
             return (
               <g key={wi}>
-                <title>{formatWeekRange(week)}</title>
+                <title>{`${getClusterName(mondayStr)} — ${formatWeekRange(week)}`}</title>
                 {/* Invisible hit area — hover anywhere near the cluster to see its week */}
                 <circle cx={cx} cy={cy} r={CLUSTER_R + 8} fill="transparent" style={{ cursor: 'default' }} />
                 {/* Soft glow ring for current week — marks where it's forming */}

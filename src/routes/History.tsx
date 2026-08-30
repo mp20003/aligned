@@ -146,24 +146,33 @@ function generateShareCard(
     const entry = days[k]
     const done = entry ? CATEGORIES.filter(cat => entry[cat] !== null).length : 0
 
-    ctx.beginPath()
-    ctx.arc(cx, cy, r, 0, Math.PI * 2)
-
     if (done === 3) {
+      ctx.beginPath()
+      ctx.arc(cx, cy, r, 0, Math.PI * 2)
       const grad = ctx.createConicGradient(0, cx, cy)
       grad.addColorStop(0,   '#1D9E75')
       grad.addColorStop(1/3, '#7F77DD')
       grad.addColorStop(2/3, '#D85A30')
       grad.addColorStop(1,   '#1D9E75')
       ctx.fillStyle = grad
+      ctx.fill()
     } else if (done === 2) {
-      ctx.fillStyle = 'rgba(255,255,255,0.18)'
+      ctx.beginPath()
+      ctx.arc(cx, cy, r * 0.85, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(255,255,255,0.32)'
+      ctx.fill()
     } else if (done === 1) {
-      ctx.fillStyle = 'rgba(255,255,255,0.09)'
+      ctx.beginPath()
+      ctx.arc(cx, cy, r * 0.4, 0, Math.PI * 2)
+      ctx.fillStyle = 'rgba(255,255,255,0.30)'
+      ctx.fill()
     } else {
-      ctx.fillStyle = 'rgba(255,255,255,0.04)'
+      ctx.beginPath()
+      ctx.arc(cx, cy, r, 0, Math.PI * 2)
+      ctx.strokeStyle = 'rgba(255,255,255,0.10)'
+      ctx.lineWidth = 1
+      ctx.stroke()
     }
-    ctx.fill()
   })
 
   ctx.fillStyle = 'rgba(255,255,255,0.20)'
@@ -174,7 +183,7 @@ function generateShareCard(
 }
 
 export default function History() {
-  const { data, logWin } = useApp()
+  const { data, logWin, clearDay } = useApp()
   const days30 = getLast30Days()
   const todayStr = dateKey(new Date())
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
@@ -281,6 +290,7 @@ export default function History() {
               labels={data.onboarding.categories}
               allDays={data.days}
               onConfirm={(key, text, reflection) => logWin(selectedKey, key, text, reflection)}
+              onClear={() => clearDay(selectedKey)}
             />
           ) : (
             <p className="hidden lg:block font-sans text-sm lg:text-base text-white/20 italic">
@@ -298,7 +308,7 @@ function Cell({
 }: {
   state: DayState; dayNum: number; isToday: boolean; isSelected: boolean; onClick: () => void
 }) {
-  const base = 'w-9 h-9 lg:w-12 lg:h-12 rounded-full flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95'
+  const base = 'relative w-9 h-9 lg:w-12 lg:h-12 rounded-full flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95'
   const selectedRing = isSelected ? 'ring-2 ring-offset-2 ring-white/50' : ''
   const todayRing = isToday && !isSelected ? 'ring-1 ring-white/20' : ''
   const textSize = 'text-xs lg:text-sm'
@@ -310,32 +320,35 @@ function Cell({
         style={{ background: 'conic-gradient(#1D9E75 0deg, #7F77DD 120deg, #D85A30 240deg, #1D9E75 360deg)' }}
         onClick={onClick}
       >
-        <span className={`font-sans ${textSize} font-medium text-white`}>{dayNum}</span>
+        <span className={`relative z-10 font-sans ${textSize} font-medium text-white`}>{dayNum}</span>
       </div>
     )
   }
 
+  // Two wins — a large, clearly-filled inner disc
   if (state === 'partial-2') {
     return (
-      <div className={`${base} ${todayRing} ${selectedRing}`}
-        style={{ background: 'rgba(255,255,255,0.16)' }} onClick={onClick}>
-        <span className={`font-sans ${textSize} text-white/55`}>{dayNum}</span>
+      <div className={`${base} ${todayRing} ${selectedRing}`} style={{ background: 'rgba(255,255,255,0.03)' }} onClick={onClick}>
+        <div className="absolute inset-[12%] rounded-full" style={{ background: 'rgba(255,255,255,0.32)' }} />
+        <span className={`relative z-10 font-sans ${textSize} text-white/75`}>{dayNum}</span>
       </div>
     )
   }
 
+  // One win — a small ember, most of the cell stays open
   if (state === 'partial-1') {
     return (
-      <div className={`${base} ${todayRing} ${selectedRing}`}
-        style={{ background: 'rgba(255,255,255,0.08)' }} onClick={onClick}>
-        <span className={`font-sans ${textSize} text-white/35`}>{dayNum}</span>
+      <div className={`${base} ${todayRing} ${selectedRing}`} style={{ background: 'transparent' }} onClick={onClick}>
+        <div className="absolute inset-[36%] rounded-full" style={{ background: 'rgba(255,255,255,0.30)' }} />
+        <span className={`relative z-10 font-sans ${textSize} text-white/45`}>{dayNum}</span>
       </div>
     )
   }
 
+  // Missed — genuinely blank, just a faint boundary so the cell still reads as a day
   return (
     <div className={`${base} ${todayRing} ${selectedRing}`}
-      style={{ background: 'rgba(255,255,255,0.04)' }} onClick={onClick}>
+      style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.07)' }} onClick={onClick}>
       <span className={`font-sans ${textSize} text-white/15`}>{dayNum}</span>
     </div>
   )
@@ -347,19 +360,36 @@ function DayEditor({
   labels,
   allDays,
   onConfirm,
+  onClear,
 }: {
   dateKey: string
   entry: DayEntry
   labels: Record<CategoryKey, { label: string; definition: string }>
   allDays: Record<string, DayEntry>
   onConfirm: (key: CategoryKey, text: string, reflection: string) => void
+  onClear: () => void
 }) {
   const date = new Date(dk + 'T12:00:00')
   const formatted = date.toLocaleDateString('default', { weekday: 'long', month: 'long', day: 'numeric' })
+  const hasAnyWin = CATEGORIES.some(k => entry[k] !== null)
+
+  function handleClear() {
+    if (window.confirm(`Clear all wins for ${formatted}? This can't be undone.`)) onClear()
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">{formatted}</p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">{formatted}</p>
+        {hasAnyWin && (
+          <button
+            onClick={handleClear}
+            className="font-sans text-xs text-white/25 hover:text-white/60 transition-colors underline underline-offset-2"
+          >
+            Clear day
+          </button>
+        )}
+      </div>
       <div className="flex flex-col gap-3 lg:gap-4">
         {CATEGORIES.map(key => (
           <WinCard
@@ -434,14 +464,21 @@ function BalanceBars({
 function LegendItem({ state, label }: { state: DayState; label: string }) {
   return (
     <div className="flex items-center gap-2">
-      {state === 'balanced' ? (
+      {state === 'balanced' && (
         <div className="w-3 h-3 rounded-full shrink-0" style={{ background: 'conic-gradient(#1D9E75 0deg, #7F77DD 120deg, #D85A30 240deg, #1D9E75 360deg)' }} />
-      ) : (
-        <div className="w-3 h-3 rounded-full shrink-0" style={{
-          background: state === 'partial-2' ? 'rgba(255,255,255,0.16)'
-            : state === 'partial-1' ? 'rgba(255,255,255,0.08)'
-            : 'rgba(255,255,255,0.04)'
-        }} />
+      )}
+      {state === 'partial-2' && (
+        <div className="relative w-3 h-3 rounded-full shrink-0" style={{ background: 'rgba(255,255,255,0.03)' }}>
+          <div className="absolute inset-[12%] rounded-full" style={{ background: 'rgba(255,255,255,0.32)' }} />
+        </div>
+      )}
+      {state === 'partial-1' && (
+        <div className="relative w-3 h-3 rounded-full shrink-0">
+          <div className="absolute inset-[36%] rounded-full" style={{ background: 'rgba(255,255,255,0.30)' }} />
+        </div>
+      )}
+      {state === 'missed' && (
+        <div className="w-3 h-3 rounded-full shrink-0" style={{ border: '1px solid rgba(255,255,255,0.15)' }} />
       )}
       <span className="font-sans text-xs lg:text-sm text-white/30">{label}</span>
     </div>
