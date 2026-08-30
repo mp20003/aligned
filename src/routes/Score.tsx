@@ -173,7 +173,7 @@ function getClusterName(mondayStr: string): string {
 
 // ── Hover tooltip (custom-styled, matches app aesthetic) ───────────────────────
 
-type HoverInfo = { x: number; y: number; title: string; subtitle: string }
+type HoverInfo = { x: number; y: number; title: string; subtitle: string; id?: string }
 
 function HoverCard({ x, y, title, subtitle }: HoverInfo) {
   return (
@@ -268,10 +268,9 @@ function getStarColor(dateStr: string): string {
 
 // ── Realistic star SVG ─────────────────────────────────────────────────────────
 
-function RealisticStar({ cx, cy, type, dateStr, born, onHover, onLeave }: {
+function RealisticStar({ cx, cy, type, dateStr, born, onSelect }: {
   cx: number; cy: number; type: StarType; dateStr: string; born: boolean
-  onHover?: (e: React.MouseEvent) => void
-  onLeave?: () => void
+  onSelect?: (e: React.MouseEvent) => void
 }) {
   const planet = hasPlanet(dateStr)
   const planetColor = getPlanetColor(dateStr)
@@ -295,9 +294,8 @@ function RealisticStar({ cx, cy, type, dateStr, born, onHover, onLeave }: {
       {/* Invisible hit area, sized to stay clear of neighbouring stars (min spacing 44) */}
       <circle
         cx={cx} cy={cy} r={20} fill="transparent" pointerEvents="all"
-        style={{ cursor: 'default' }}
-        onMouseEnter={onHover}
-        onMouseLeave={onLeave}
+        style={{ cursor: 'pointer' }}
+        onClick={onSelect}
       />
       <defs>
         <radialGradient id={id} cx="50%" cy="50%" r="50%">
@@ -521,12 +519,17 @@ function WeekConstellation({
   const containerRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<HoverInfo | null>(null)
 
-  function handleStarHover(e: React.MouseEvent, dk: string) {
-    const rect = containerRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const planet = hasPlanet(dk)
-    const title = `${getStarName(dk)}${planet ? ` · ${getPlanetName(dk)}` : ''}`
-    setHover({ x: e.clientX - rect.left, y: e.clientY - rect.top, title, subtitle: formatDayLabel(dk) })
+  // Tap a star to see its name/date (not hover — this is the primary view on mobile)
+  function handleStarSelect(e: React.MouseEvent, dk: string) {
+    e.stopPropagation()
+    setHover(prev => {
+      if (prev?.id === dk) return null // tap again to dismiss
+      const rect = containerRef.current?.getBoundingClientRect()
+      if (!rect) return prev
+      const planet = hasPlanet(dk)
+      const title = `${getStarName(dk)}${planet ? ` · ${getPlanetName(dk)}` : ''}`
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top, title, subtitle: formatDayLabel(dk), id: dk }
+    })
   }
 
   const [exploding, setExploding] = useState<ExplodingDay[]>([])
@@ -612,7 +615,7 @@ function WeekConstellation({
   })
 
   return (
-    <div className="relative">
+    <div className="relative" onClick={() => setHover(null)}>
       <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0d0d1e' }}>
         <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }}>
           {/* Constellation lines */}
@@ -645,8 +648,7 @@ function WeekConstellation({
                   type={getStarType(dk)}
                   dateStr={dk}
                   born={false}
-                  onHover={(e) => handleStarHover(e, dk)}
-                  onLeave={() => setHover(null)}
+                  onSelect={(e) => handleStarSelect(e, dk)}
                 />
               )
             }

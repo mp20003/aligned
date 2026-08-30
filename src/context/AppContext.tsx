@@ -39,6 +39,7 @@ type AppContextValue = {
   completeOnboarding: (onboarding: OnboardingData) => void
   logWin: (date: string, category: 'physical' | 'mental' | 'spiritual', text: string, reflection?: string) => void
   clearDay: (date: string) => void
+  clearRange: (startDate: string, endDate: string) => void
   updateSettings: (name: string, categories: AppData['onboarding']['categories']) => void
   resetPractice: () => void
   restoreData: (imported: AppData) => void
@@ -137,6 +138,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     update({ ...current, days })
   }, [update])
 
+  const clearRange = useCallback((startDate: string, endDate: string) => {
+    const current = dataRef.current
+    const days = { ...current.days }
+    let changed = false
+    for (const key of Object.keys(days)) {
+      if (key >= startDate && key <= endDate) {
+        delete days[key]
+        changed = true
+      }
+    }
+    if (changed) update({ ...current, days })
+  }, [update])
+
   const updateSettings = useCallback((name: string, categories: AppData['onboarding']['categories']) => {
     update({ ...dataRef.current, onboarding: { ...dataRef.current.onboarding, name, categories } })
   }, [update])
@@ -156,7 +170,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AppContext.Provider value={{ data, session, authLoading, completeOnboarding, logWin, clearDay, updateSettings, resetPractice, restoreData, signOut }}>
+    <AppContext.Provider value={{ data, session, authLoading, completeOnboarding, logWin, clearDay, clearRange, updateSettings, resetPractice, restoreData, signOut }}>
       {children}
     </AppContext.Provider>
   )

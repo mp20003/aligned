@@ -16,14 +16,27 @@ const ACCENT_TEXT: Record<CategoryKey, string> = {
   spiritual: 'text-spiritual',
 }
 
+function monthRange(monthStr: string): [string, string] {
+  const [y, m] = monthStr.split('-').map(Number)
+  const lastDay = new Date(y, m, 0).getDate()
+  return [`${monthStr}-01`, `${monthStr}-${String(lastDay).padStart(2, '0')}`]
+}
+
+function monthLabel(monthStr: string): string {
+  const [y, m] = monthStr.split('-').map(Number)
+  return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+}
+
 export default function Settings() {
-  const { data, updateSettings, resetPractice, restoreData, signOut } = useApp()
+  const { data, updateSettings, resetPractice, clearRange, restoreData, signOut } = useApp()
   const navigate = useNavigate()
 
   const [name, setName] = useState(data.onboarding.name)
   const [categories, setCategories] = useState({ ...data.onboarding.categories })
   const [saved, setSaved] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [clearMonth, setClearMonth] = useState('')
+  const [confirmClearMonth, setConfirmClearMonth] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
 
   function updateCategory(key: CategoryKey, field: 'label' | 'definition', value: string) {
@@ -69,6 +82,14 @@ export default function Settings() {
     resetPractice()
     setConfirmReset(false)
     navigate('/today')
+  }
+
+  function handleClearMonth() {
+    if (!clearMonth) return
+    const [start, end] = monthRange(clearMonth)
+    clearRange(start, end)
+    setConfirmClearMonth(false)
+    setClearMonth('')
   }
 
   const dayCount = Object.keys(data.days).length
@@ -162,6 +183,55 @@ export default function Settings() {
           </button>
           <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
         </div>
+      </section>
+
+      {/* Clear a month */}
+      <section className="flex flex-col gap-3 pt-6" style={divider}>
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Clear a month</p>
+        <p className="font-sans text-xs lg:text-sm text-white/30 leading-relaxed">
+          Remove every win logged in one month — useful for wiping out test data or a month you'd rather not keep.
+        </p>
+        <div className="flex gap-3">
+          <input
+            type="month"
+            value={clearMonth}
+            onChange={e => { setClearMonth(e.target.value); setConfirmClearMonth(false) }}
+            className="flex-1 rounded-xl px-3 py-3 lg:py-3.5 font-sans text-sm lg:text-base text-white/70 focus:outline-none"
+            style={surfaceBtn}
+          />
+          {!confirmClearMonth ? (
+            <button
+              onClick={() => clearMonth && setConfirmClearMonth(true)}
+              disabled={!clearMonth}
+              className="px-5 py-3 lg:py-3.5 rounded-xl font-sans text-sm lg:text-base text-white/55 hover:text-white/80 transition-colors disabled:opacity-30 disabled:hover:text-white/55"
+              style={surfaceBtn}
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
+        {confirmClearMonth && (
+          <div className="flex flex-col gap-3 rounded-2xl px-4 py-4" style={surfaceBtn}>
+            <p className="font-serif text-sm lg:text-base text-white/55 leading-relaxed">
+              This will delete every win logged in {monthLabel(clearMonth)}. Cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmClearMonth(false)}
+                className="flex-1 py-2.5 lg:py-3 rounded-xl font-sans text-sm lg:text-base text-white/40"
+                style={surfaceBtn}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClearMonth}
+                className="flex-1 py-2.5 lg:py-3 rounded-xl bg-spiritual text-white font-sans text-sm lg:text-base"
+              >
+                Yes, clear it
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Reset */}
