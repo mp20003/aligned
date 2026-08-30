@@ -32,6 +32,29 @@ function saveLocal(data: AppData) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
 
+// The Triova screen tracks "has this date already exploded into dust /
+// already birthed its star" as one-time flags in these two localStorage
+// sets, so the animation only ever plays once per date. Nothing else in
+// the app knows about them — so whenever days are wiped or cleared here,
+// their flags have to be wiped too, or a date can stay "dead"/"born"
+// forever even after its wins are deleted and relogged.
+const DUST_KEY = 'triova-dusts'
+const BORN_KEY = 'triova-born'
+
+function clearDateFlags(predicate: (dateStr: string) => boolean) {
+  for (const storageKey of [DUST_KEY, BORN_KEY]) {
+    try {
+      const raw = localStorage.getItem(storageKey)
+      if (!raw) continue
+      const dates: string[] = JSON.parse(raw)
+      const kept = dates.filter(d => !predicate(d))
+      if (kept.length !== dates.length) localStorage.setItem(storageKey, JSON.stringify(kept))
+    } catch {
+      localStorage.removeItem(storageKey)
+    }
+  }
+}
+
 type AppContextValue = {
   data: AppData
   session: Session | null
@@ -121,6 +144,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const logWin = useCallback((date: string, category: 'physical' | 'mental' | 'spiritual', text: string, reflection?: string) => {
     const current = dataRef.current
     const day = current.days[date] ?? { physical: null, mental: null, spiritual: null }
+    // A date that previously exploded into dust (0 wins that day) can be
+    // relogged later from History — clear its stale flag so Triova re-evaluates it.
+    clearDateFlags(d => d === date)
     update({
       ...current,
       days: {
@@ -135,6 +161,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!(date in current.days)) return
     const days = { ...current.days }
     delete days[date]
+    clearDateFlags(d => d === date)
     update({ ...current, days })
   }, [update])
 
@@ -148,6 +175,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         changed = true
       }
     }
+    clearDateFlags(d => d >= startDate && d <= endDate)
     if (changed) update({ ...current, days })
   }, [update])
 
@@ -156,10 +184,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [update])
 
   const resetPractice = useCallback(() => {
+    localStorage.removeItem(DUST_KEY)
+    localStorage.removeItem(BORN_KEY)
     update({ ...dataRef.current, days: {} })
   }, [update])
 
   const restoreData = useCallback((imported: AppData) => {
+    // Imported days may not match this device's dust/born flags at all — drop them
+    // so Triova re-evaluates every date fresh against the restored data.
+    localStorage.removeItem(DUST_KEY)
+    localStorage.removeItem(BORN_KEY)
     update(imported)
   }, [update])
 
@@ -167,6 +201,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     supabase.auth.signOut()
     setData(defaultData)
     saveLocal(defaultData)
+    localStorage.removeItem(DUST_KEY)
+    localStorage.removeItem(BORN_KEY)
   }, [])
 
   return (

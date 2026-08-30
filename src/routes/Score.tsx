@@ -107,7 +107,8 @@ type DaysMap = Record<string, { physical: unknown; mental: unknown; spiritual: u
 // shared by the This Week header count, the constellation, and the universe cluster
 // so the numbers can never drift apart from each other.
 function getAlignedDates(week: Date[], days: DaysMap): Date[] {
-  return week.filter(d => !isFuture(d) && !isToday(d) && getWins(days, dateKey(d)) === 3)
+  // Today counts as soon as it's fully aligned — no need to wait until it's "over"
+  return week.filter(d => !isFuture(d) && getWins(days, dateKey(d)) === 3)
 }
 
 function getPartialDates(week: Date[], days: DaysMap): Date[] {
@@ -557,12 +558,13 @@ function WeekConstellation({
     const newSeenBorn = new Set(seenBorn)
 
     week.forEach((d, i) => {
-      if (isFuture(d) || isToday(d)) return
+      if (isFuture(d)) return
       const dk = dateKey(d)
       const wins = getWins(days, dk)
       const [cx, cy] = positions[i]
+      const dayInProgress = isToday(d) && wins < 3 // today doesn't "fail" until it's over
 
-      if (wins === 0 && !dusts.has(dk)) {
+      if (!dayInProgress && wins === 0 && !dusts.has(dk)) {
         toExplode.push({ dateStr: dk, cx, cy })
       }
       if (wins === 3 && !newSeenBorn.has(dk)) {
@@ -611,10 +613,10 @@ function WeekConstellation({
 
   const isExplodingSet = new Set(exploding.map(e => e.dateStr))
 
-  // Constellation lines between full stars
+  // Constellation lines between full stars (today included once it's aligned)
   const fullStarIndices: number[] = []
   week.forEach((d, i) => {
-    if (isFuture(d) || isToday(d)) return
+    if (isFuture(d)) return
     const dk = dateKey(d)
     if (getWins(days, dk) === 3 && !dusts.has(dk) && !isExplodingSet.has(dk)) {
       fullStarIndices.push(i)
@@ -638,15 +640,16 @@ function WeekConstellation({
           {week.map((d, i) => {
             const dk = dateKey(d)
             const [cx, cy] = positions[i]
+            const wins = getWins(days, dk)
 
-            if (isFuture(d) || isToday(d)) return null
+            if (isFuture(d)) return null
+            if (isToday(d) && wins < 3) return null // today shows nothing until it's fully aligned
             if (isExplodingSet.has(dk)) return null
 
             if (dusts.has(dk)) {
               return <DustRemnant key={dk} cx={cx} cy={cy} dateStr={dk} />
             }
 
-            const wins = getWins(days, dk)
             if (wins === 3) {
               return (
                 <RealisticStar
