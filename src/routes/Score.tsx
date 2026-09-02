@@ -1037,7 +1037,7 @@ export default function Pulse() {
   const [expandedWeek, setExpandedWeek] = useState<Date[] | null>(null)
 
   return (
-    <div className="min-h-screen max-w-md lg:max-w-2xl mx-auto px-6 lg:px-10 pt-12 lg:pt-16 pb-28 flex flex-col gap-10"
+    <div className="min-h-screen max-w-md lg:max-w-6xl mx-auto px-6 lg:px-10 pt-12 lg:pt-16 pb-28 flex flex-col gap-10"
       style={{ background: '#0a0a14' }}>
 
       {expandedWeek && (
@@ -1053,37 +1053,42 @@ export default function Pulse() {
         </p>
       </div>
 
-      {/* This week */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
-          <p className="font-sans text-xs uppercase tracking-widest text-white/25">
-            This week · {formatWeekRange(week)}
-          </p>
-          <p className="font-sans text-xs text-white/25">
-            {weekAligned} star{weekAligned !== 1 ? 's' : ''} born · {elapsed} day{elapsed !== 1 ? 's' : ''} elapsed
-          </p>
+      {/* This week + Universe — stacked on mobile, side-by-side on desktop
+          so the page uses the full width of a laptop screen instead of
+          sitting in a narrow centered column. */}
+      <div className="flex flex-col gap-10 lg:grid lg:grid-cols-2 lg:gap-10 lg:items-start">
+        {/* This week */}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="font-sans text-xs uppercase tracking-widest text-white/25">
+              This week · {formatWeekRange(week)}
+            </p>
+            <p className="font-sans text-xs text-white/25">
+              {weekAligned} star{weekAligned !== 1 ? 's' : ''} born · {elapsed} day{elapsed !== 1 ? 's' : ''} elapsed
+            </p>
+          </div>
+
+          <WeekConstellation week={week} days={data.days} />
+
+          {todayWins < 3 && (
+            <p className="font-serif text-sm text-white/30 italic text-center">
+              {todayWins === 0
+                ? 'Log your first win today to birth a star.'
+                : todayWins === 1
+                ? "One win in. Two more and tonight's star ignites."
+                : 'Two wins in. One more to fire the supernova.'}
+            </p>
+          )}
+          {todayWins === 3 && (
+            <p className="font-serif text-sm text-white/50 italic text-center">
+              All three wins logged. Tonight's star is alive.
+            </p>
+          )}
         </div>
 
-        <WeekConstellation week={week} days={data.days} />
-
-        {todayWins < 3 && (
-          <p className="font-serif text-sm text-white/30 italic text-center">
-            {todayWins === 0
-              ? 'Log your first win today to birth a star.'
-              : todayWins === 1
-              ? "One win in. Two more and tonight's star ignites."
-              : 'Two wins in. One more to fire the supernova.'}
-          </p>
-        )}
-        {todayWins === 3 && (
-          <p className="font-serif text-sm text-white/50 italic text-center">
-            All three wins logged. Tonight's star is alive.
-          </p>
-        )}
+        {/* Universe */}
+        <UniversePanel weeks={allWeeks} days={data.days} onSelectWeek={setExpandedWeek} />
       </div>
-
-      {/* Universe */}
-      <UniversePanel weeks={allWeeks} days={data.days} onSelectWeek={setExpandedWeek} />
     </div>
   )
 }
