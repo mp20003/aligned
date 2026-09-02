@@ -359,7 +359,10 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
 
       {type === 'diffraction' && (
         <>
-          <circle cx={cx} cy={cy} r={36 * scale} fill={`url(#${id})`} />
+          {/* Outer glow kept tight to the star itself — at the old radius (36)
+              it regularly overlapped a neighbouring star's own glow, since
+              stars can sit as close as 44 units apart. */}
+          <circle cx={cx} cy={cy} r={16 * scale} fill={`url(#${id})`} />
           <line x1={cx - 44 * scale} y1={cy} x2={cx + 44 * scale} y2={cy} stroke="white" strokeWidth="0.8" opacity="0.35" />
           <line x1={cx} y1={cy - 44 * scale} x2={cx} y2={cy + 44 * scale} stroke="white" strokeWidth="0.8" opacity="0.35" />
           <line x1={cx - 28 * scale} y1={cy - 28 * scale} x2={cx + 28 * scale} y2={cy + 28 * scale} stroke="white" strokeWidth="0.5" opacity="0.18" />
@@ -371,8 +374,10 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
 
       {type === 'giant' && (
         <>
-          <circle cx={cx} cy={cy} r={44 * scale} fill={`url(#${id})`} />
-          <circle cx={cx} cy={cy} r={16 * scale} fill="white" opacity="0.18" />
+          {/* Same tightening as diffraction stars — was 44, now stays clear
+              of neighbouring stars at the minimum 44-unit spacing. */}
+          <circle cx={cx} cy={cy} r={20 * scale} fill={`url(#${id})`} />
+          <circle cx={cx} cy={cy} r={9 * scale} fill="white" opacity="0.18" />
           <circle cx={cx} cy={cy} r={9 * scale} fill={`url(#${id2})`} />
           <circle cx={cx} cy={cy} r={5 * scale} fill="white" />
         </>
