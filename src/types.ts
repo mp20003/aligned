@@ -23,7 +23,10 @@ export type OnboardingData = {
   categories: Record<CategoryKey, CategoryConfig>
 }
 
+export type WinBank = Record<CategoryKey, string[]>
+
 export type AppData = {
   onboarding: OnboardingData
   days: Record<string, DayEntry> // key: "YYYY-MM-DD"
+  bank: WinBank // user-saved reusable wins per category
 }

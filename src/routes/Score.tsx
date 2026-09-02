@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useApp } from '../context/AppContext'
 import { dateKey } from '../lib/date'
 import type { CategoryKey } from '../types'
@@ -256,9 +257,23 @@ function getPlanetAngle(dateStr: string, idx: number): number {
   return rand() * Math.PI * 2
 }
 
+// Distance for planet idx (unscaled — multiply by the star's own scale at
+// render time). Spaced further apart than a single fixed increment so
+// orbits read as clearly separate rings.
+function getPlanetDistance(idx: number): number {
+  return 16 + idx * 14
+}
+
+// Kepler-ish: period grows with distance^1.5, so an outer planet visibly
+// crawls while an inner one zips around — a little organic jitter keeps it
+// from feeling like a formula.
 function getOrbitDuration(dateStr: string, idx: number): number {
   const rand = seededRand(strHash(dateStr + 'orbitdur' + idx))
-  return 8 + rand() * 6 // 8–14s, varies per planet
+  const refDist = getPlanetDistance(0)
+  const basePeriod = 6
+  const period = basePeriod * Math.pow(getPlanetDistance(idx) / refDist, 1.5)
+  const jitter = 0.85 + rand() * 0.3 // ±15%
+  return period * jitter
 }
 
 // Each planet has its own chance of a small moon orbiting it.
@@ -367,7 +382,7 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
       {Array.from({ length: planetCount }, (_, idx) => {
         const planetColor = getPlanetColor(dateStr, idx)
         const planetAngleDeg = (getPlanetAngle(dateStr, idx) * 180) / Math.PI
-        const planetDist = (16 + idx * 8) * scale
+        const planetDist = getPlanetDistance(idx) * scale
         const orbitDuration = getOrbitDuration(dateStr, idx)
         const px = cx + planetDist
         const py = cy
@@ -404,10 +419,11 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
         )
       })}
 
-      {/* Asteroids — every star gets at least one, drifting on a slow, distant orbit */}
+      {/* Asteroids — every star gets at least one, drifting on a slow, distant orbit,
+          each dragging a short fading dust trail behind its direction of travel */}
       {Array.from({ length: asteroidCount }, (_, idx) => {
         const angleDeg = (getAsteroidAngle(dateStr, idx) * 180) / Math.PI
-        const dist = (58 + idx * 12) * scale
+        const dist = (72 + idx * 16) * scale
         const duration = getAsteroidOrbitDuration(dateStr, idx)
         const size = getAsteroidSize(dateStr, idx)
         const ax = cx + dist
@@ -422,6 +438,16 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
               dur={`${duration}s`}
               repeatCount="indefinite"
             />
+            {[3, 2, 1].map(step => {
+              const rad = (-step * 3.5 * Math.PI) / 180
+              const tx = cx + dist * Math.cos(rad)
+              const ty = cy + dist * Math.sin(rad)
+              return (
+                <circle key={step} cx={tx} cy={ty}
+                  r={Math.max(size * (0.7 - step * 0.15), 0.15)}
+                  fill="#9C9284" opacity={Math.max(0.32 - step * 0.09, 0.04)} />
+              )
+            })}
             <circle cx={ax} cy={ay} r={size} fill="#9C9284" opacity="0.55" />
           </g>
         )
@@ -564,6 +590,25 @@ function NovaBurst({ cx, cy, onDone }: { cx: number; cy: number; onDone: () => v
   )
 }
 
+// Faint far-field star sprinkles behind the This Week constellation — fixed
+// seed (not date-based), pure atmosphere so it doesn't reshuffle week to week.
+function WeekBackgroundStars() {
+  const rand = seededRand(strHash('triova-thisweek-bg-stars'))
+  const stars = Array.from({ length: 45 }, () => ({
+    x: rand() * SVG_W,
+    y: rand() * SVG_H,
+    r: 0.3 + rand() * 0.5,
+    opacity: 0.08 + rand() * 0.22,
+  }))
+  return (
+    <g>
+      {stars.map((s, i) => (
+        <circle key={i} cx={s.x} cy={s.y} r={s.r} fill="white" opacity={s.opacity} />
+      ))}
+    </g>
+  )
+}
+
 // ── Week constellation ─────────────────────────────────────────────────────────
 
 type ExplodingDay = { dateStr: string; cx: number; cy: number }
@@ -696,6 +741,8 @@ function WeekConstellation({
     <div className="relative" onClick={handlePanelTap}>
       <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0d0d1e' }}>
         <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }}>
+          <WeekBackgroundStars />
+
           {/* Constellation lines */}
           {fullStarIndices.slice(0, -1).map((i, idx) => {
             const j = fullStarIndices[idx + 1]
@@ -842,9 +889,11 @@ function NebulaField() {
 function UniversePanel({
   weeks,
   days,
+  onSelectWeek,
 }: {
   weeks: Date[][]
   days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown } | null>
+  onSelectWeek: (week: Date[]) => void
 }) {
   const padding = 36
   const containerRef = useRef<HTMLDivElement>(null)
@@ -888,12 +937,15 @@ function UniversePanel({
 
             return (
               <g key={wi}>
-                {/* Invisible hit area, sized to stay clear of neighbouring clusters (min spacing 56) */}
+                {/* Invisible hit area, sized to stay clear of neighbouring clusters (min spacing 56).
+                    Click/tap opens the full-size view — works on both desktop and mobile,
+                    unlike the hover-only tooltip. */}
                 <circle
                   cx={cx} cy={cy} r={CLUSTER_R} fill="transparent" pointerEvents="all"
-                  style={{ cursor: 'default', touchAction: 'manipulation' }}
+                  style={{ cursor: 'pointer', touchAction: 'manipulation' }}
                   onMouseEnter={(e) => handleClusterHover(e, mondayStr, week)}
                   onMouseLeave={() => setHover(null)}
+                  onClick={() => onSelectWeek(week)}
                 />
                 {/* Soft glow ring for current week — marks where it's forming */}
                 {isCurrent && (
@@ -931,6 +983,49 @@ function UniversePanel({
 
 // ── Main screen ────────────────────────────────────────────────────────────────
 
+// Full-size overlay for a week selected from the Universe panel — sits on
+// top of the This Week page, dismissed with the close button.
+function ExpandedWeekModal({
+  week,
+  days,
+  onClose,
+}: {
+  week: Date[]
+  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown } | null>
+  onClose: () => void
+}) {
+  const mondayStr = dateKey(week[0])
+  // Rendered via a portal straight to <body>: the page-transition wrapper that
+  // hosts every route applies a persistent `transform` (translateY) after its
+  // enter animation finishes, and per the CSS spec that makes it the
+  // containing block for any `position: fixed` descendant — trapping a plain
+  // fixed overlay behind the (also fixed) nav bar instead of above it.
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-6 py-12 overflow-y-auto"
+      style={{ background: 'rgba(5,5,12,0.94)' }}
+      onClick={onClose}
+    >
+      <div className="w-full max-w-md lg:max-w-xl flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-0.5">
+            <p className="font-sans text-xs uppercase tracking-widest text-white/35">{getClusterName(mondayStr)}</p>
+            <h2 className="font-serif text-xl lg:text-2xl text-white">{formatWeekRange(week)}</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="shrink-0 font-sans text-xs lg:text-sm text-white/50 hover:text-white/80 transition-colors underline underline-offset-4"
+          >
+            Back to this week
+          </button>
+        </div>
+        <WeekConstellation week={week} days={days} />
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 export default function Pulse() {
   const { data } = useApp()
   const week = getCurrentWeek()
@@ -939,10 +1034,15 @@ export default function Pulse() {
   const todayWins = getWins(data.days, todayStr)
   const weekAligned = getAlignedDates(week, data.days).length
   const elapsed = week.filter(d => !isFuture(d) && !isToday(d)).length
+  const [expandedWeek, setExpandedWeek] = useState<Date[] | null>(null)
 
   return (
     <div className="min-h-screen max-w-md lg:max-w-2xl mx-auto px-6 lg:px-10 pt-12 lg:pt-16 pb-28 flex flex-col gap-10"
       style={{ background: '#0a0a14' }}>
+
+      {expandedWeek && (
+        <ExpandedWeekModal week={expandedWeek} days={data.days} onClose={() => setExpandedWeek(null)} />
+      )}
 
       {/* Header */}
       <div className="flex flex-col gap-1">
@@ -983,7 +1083,7 @@ export default function Pulse() {
       </div>
 
       {/* Universe */}
-      <UniversePanel weeks={allWeeks} days={data.days} />
+      <UniversePanel weeks={allWeeks} days={data.days} onSelectWeek={setExpandedWeek} />
     </div>
   )
 }

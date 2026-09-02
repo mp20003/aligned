@@ -27,7 +27,7 @@ function formatDateLabel(dateStr: string): string {
 }
 
 export default function Today() {
-  const { data, logWin } = useApp()
+  const { data, logWin, clearWin, addToBank, removeFromBank } = useApp()
 
   const date = todayKey()
   const entry = data.days[date] ?? { physical: null, mental: null, spiritual: null }
@@ -87,7 +87,7 @@ export default function Today() {
 
       {/* First-day welcome */}
       {isFirstDay && (
-        <div className="surface rounded-2xl px-5 lg:px-7 py-4 lg:py-5 flex flex-col gap-2">
+        <div className="surface rounded-2xl px-5 lg:px-6 py-4 lg:py-5 flex flex-col gap-2">
           <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Day one</p>
           <p className="font-serif text-sm lg:text-base text-white/60 leading-relaxed">
             This is where it begins. Three wins — one for each part of you. There's no right answer, only an honest one.
@@ -98,7 +98,7 @@ export default function Today() {
 
       {/* Sunday check-in */}
       {isSunday && !sundayDone && (
-        <div className="surface rounded-2xl px-5 lg:px-7 py-4 lg:py-5 flex flex-col gap-3">
+        <div className="surface rounded-2xl px-5 lg:px-6 py-4 lg:py-5 flex flex-col gap-3">
           <div className="flex flex-col gap-0.5">
             <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">This week</p>
             <p className="font-serif text-sm lg:text-base text-white/60">Which part of you felt hardest to show up for?</p>
@@ -125,13 +125,18 @@ export default function Today() {
             key={key}
             categoryKey={key}
             label={categories[key].label}
+            definition={categories[key].definition}
             existing={entry[key]}
             pastWins={getPastWins(data.days, key, date)}
             dailySuggestions={getDailySuggestions(key, date)}
+            bank={data.bank[key]}
             onConfirm={(text, reflection) => {
               logWin(date, key, text, reflection)
               handleWinLogged(key)
             }}
+            onClear={() => clearWin(date, key)}
+            onSaveToBank={text => addToBank(key, text)}
+            onRemoveFromBank={text => removeFromBank(key, text)}
           />
         ))}
       </div>
@@ -173,7 +178,12 @@ function AlignedState({ date, categories, todayEntry, onEdit }: AlignedStateProp
         style={{ background: 'conic-gradient(#1D9E75 0deg, #7F77DD 120deg, #D85A30 240deg, #1D9E75 360deg)' }}
       >
         <div className="w-full h-full rounded-full flex items-center justify-center" style={{ background: '#0f0f1a' }}>
-          <div className="w-10 h-10 lg:w-14 lg:h-14 rounded-full" style={{ background: 'conic-gradient(#1D9E75 0deg, #7F77DD 120deg, #D85A30 240deg, #1D9E75 360deg)', opacity: 0.4 }} />
+          <div className="relative w-10 h-10 lg:w-14 lg:h-14 rounded-full" style={{ background: 'conic-gradient(#1D9E75 0deg, #7F77DD 120deg, #D85A30 240deg, #1D9E75 360deg)', opacity: 0.9 }}>
+            <div
+              className="absolute inset-0 rounded-full"
+              style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.2) 45%, rgba(255,255,255,0) 75%)' }}
+            />
+          </div>
         </div>
       </div>
 

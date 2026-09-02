@@ -49,10 +49,12 @@ export function dateSeed(dateStr: string) {
   return dateStr.split('-').reduce((acc, n) => acc + parseInt(n), 0)
 }
 
+// One clear example per day — was previously 2-3 rotating chips, which read
+// as a menu of options rather than a single illustrative example.
 export function getDailySuggestions(key: CategoryKey, dateStr: string): string[] {
   const list = SUGGESTIONS[key]
   const seed = dateSeed(dateStr)
-  return [0, 1, 2].map(i => list[(seed + i) % list.length])
+  return [list[seed % list.length]]
 }
 
 export function getPastWins(

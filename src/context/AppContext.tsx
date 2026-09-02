@@ -1,9 +1,10 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
-import type { AppData, OnboardingData } from '../types'
+import type { AppData, CategoryKey, OnboardingData } from '../types'
 
 const STORAGE_KEY = 'three-wins-data'
+const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
 
 const defaultData: AppData = {
   onboarding: {
@@ -16,6 +17,7 @@ const defaultData: AppData = {
     },
   },
   days: {},
+  bank: { physical: [], mental: [], spiritual: [] },
 }
 
 function loadLocal(): AppData {
@@ -61,12 +63,15 @@ type AppContextValue = {
   authLoading: boolean
   completeOnboarding: (onboarding: OnboardingData) => void
   logWin: (date: string, category: 'physical' | 'mental' | 'spiritual', text: string, reflection?: string) => void
+  clearWin: (date: string, category: CategoryKey) => void
   clearDay: (date: string) => void
   clearRange: (startDate: string, endDate: string) => void
   updateSettings: (name: string, categories: AppData['onboarding']['categories']) => void
   resetPractice: () => void
   restoreData: (imported: AppData) => void
   signOut: () => void
+  addToBank: (category: CategoryKey, text: string) => void
+  removeFromBank: (category: CategoryKey, text: string) => void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -96,7 +101,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ;(async () => {
       const { data: row, error } = await supabase
         .from('app_data')
-        .select('onboarding, days')
+        .select('onboarding, days, bank')
         .eq('user_id', session.user.id)
         .maybeSingle()
 
@@ -108,7 +113,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       if (row) {
-        const merged: AppData = { onboarding: row.onboarding, days: row.days }
+        const merged: AppData = {
+          onboarding: row.onboarding,
+          days: row.days,
+          bank: row.bank ?? defaultData.bank,
+        }
         setData(merged)
         saveLocal(merged)
       } else {
@@ -118,6 +127,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           user_id: session.user.id,
           onboarding: seed.onboarding,
           days: seed.days,
+          bank: seed.bank,
         })
       }
     })()
@@ -130,7 +140,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (session) {
       supabase
         .from('app_data')
-        .upsert({ user_id: session.user.id, onboarding: next.onboarding, days: next.days })
+        .upsert({ user_id: session.user.id, onboarding: next.onboarding, days: next.days, bank: next.bank })
         .then(({ error }) => {
           if (error) console.error('Failed to sync app data', error)
         })
@@ -154,6 +164,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         [date]: { ...day, [category]: { text, completedAt: new Date().toISOString(), reflection } },
       },
     })
+  }, [update])
+
+  const clearWin = useCallback((date: string, category: CategoryKey) => {
+    const current = dataRef.current
+    const day = current.days[date]
+    if (!day || day[category] === null) return
+    const nextDay = { ...day, [category]: null }
+    const days = { ...current.days }
+    if (CATEGORIES.every(k => nextDay[k] === null)) delete days[date]
+    else days[date] = nextDay
+    clearDateFlags(d => d === date)
+    update({ ...current, days })
   }, [update])
 
   const clearDay = useCallback((date: string) => {
@@ -194,7 +216,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // so Triova re-evaluates every date fresh against the restored data.
     localStorage.removeItem(DUST_KEY)
     localStorage.removeItem(BORN_KEY)
-    update(imported)
+    update({ ...imported, bank: imported.bank ?? defaultData.bank })
+  }, [update])
+
+  const addToBank = useCallback((category: CategoryKey, text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const current = dataRef.current
+    const existing = current.bank[category] ?? []
+    if (existing.includes(trimmed)) return
+    update({ ...current, bank: { ...current.bank, [category]: [trimmed, ...existing] } })
+  }, [update])
+
+  const removeFromBank = useCallback((category: CategoryKey, text: string) => {
+    const current = dataRef.current
+    const existing = current.bank[category] ?? []
+    update({ ...current, bank: { ...current.bank, [category]: existing.filter(w => w !== text) } })
   }, [update])
 
   const signOut = useCallback(() => {
@@ -206,7 +243,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AppContext.Provider value={{ data, session, authLoading, completeOnboarding, logWin, clearDay, clearRange, updateSettings, resetPractice, restoreData, signOut }}>
+    <AppContext.Provider value={{ data, session, authLoading, completeOnboarding, logWin, clearWin, clearDay, clearRange, updateSettings, resetPractice, restoreData, signOut, addToBank, removeFromBank }}>
       {children}
     </AppContext.Provider>
   )

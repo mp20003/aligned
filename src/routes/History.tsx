@@ -18,6 +18,11 @@ import type { CategoryKey, DayEntry } from '../types'
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const CATEGORY_HEX: Record<CategoryKey, string> = {
+  physical: '#1D9E75',
+  mental: '#7F77DD',
+  spiritual: '#D85A30',
+}
 
 function generateInsight(
   days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown }>,
@@ -100,6 +105,27 @@ function getDayState(
   return 'missed'
 }
 
+function getCompletedCategories(
+  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown }>,
+  date: Date
+): CategoryKey[] {
+  const entry = days[dateKey(date)]
+  if (!entry) return []
+  return CATEGORIES.filter(k => entry[k] !== null)
+}
+
+// Builds a conic gradient from only the categories actually completed that
+// day, so a two-win day reads in the colours of the two wins that were
+// actually logged, not a generic placeholder shade.
+function buildConicGradient(cats: CategoryKey[]): string {
+  if (cats.length === 0) return 'transparent'
+  if (cats.length === 1) return CATEGORY_HEX[cats[0]]
+  const step = 360 / cats.length
+  const stops = cats.map((c, i) => `${CATEGORY_HEX[c]} ${i * step}deg`)
+  stops.push(`${CATEGORY_HEX[cats[0]]} 360deg`)
+  return `conic-gradient(${stops.join(', ')})`
+}
+
 function generateShareCard(
   days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown }>,
   days30: Date[],
@@ -180,7 +206,7 @@ function generateShareCard(
 }
 
 export default function History() {
-  const { data, logWin, clearDay } = useApp()
+  const { data, logWin, clearWin, clearDay, addToBank, removeFromBank } = useApp()
   const days30 = getLast30Days()
   const todayStr = dateKey(new Date())
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
@@ -247,6 +273,7 @@ export default function History() {
                   <div key={di} className="flex items-center justify-center">
                     <Cell
                       state={state}
+                      completed={getCompletedCategories(data.days, day)}
                       dayNum={dayNum}
                       isToday={isToday}
                       isSelected={isSelected}
@@ -286,7 +313,11 @@ export default function History() {
               entry={selectedEntry}
               labels={data.onboarding.categories}
               allDays={data.days}
+              bank={data.bank}
               onConfirm={(key, text, reflection) => logWin(selectedKey, key, text, reflection)}
+              onClearWin={key => clearWin(selectedKey, key)}
+              onSaveToBank={(key, text) => addToBank(key, text)}
+              onRemoveFromBank={(key, text) => removeFromBank(key, text)}
               onClear={() => clearDay(selectedKey)}
             />
           ) : (
@@ -301,9 +332,9 @@ export default function History() {
 }
 
 function Cell({
-  state, dayNum, isToday, isSelected, onClick,
+  state, completed, dayNum, isToday, isSelected, onClick,
 }: {
-  state: DayState; dayNum: number; isToday: boolean; isSelected: boolean; onClick: () => void
+  state: DayState; completed: CategoryKey[]; dayNum: number; isToday: boolean; isSelected: boolean; onClick: () => void
 }) {
   const base = 'relative w-9 h-9 lg:w-12 lg:h-12 rounded-full flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95'
   const selectedRing = isSelected ? 'ring-2 ring-offset-2 ring-white/50' : ''
@@ -314,7 +345,7 @@ function Cell({
     return (
       <div
         className={`${base} ${todayRing} ${selectedRing}`}
-        style={{ background: 'conic-gradient(#1D9E75 0deg, #7F77DD 120deg, #D85A30 240deg, #1D9E75 360deg)' }}
+        style={{ background: buildConicGradient(completed) }}
         onClick={onClick}
       >
         <span className={`relative z-10 font-sans ${textSize} font-medium text-white`}>{dayNum}</span>
@@ -322,22 +353,22 @@ function Cell({
     )
   }
 
-  // Two wins — a large, clearly-filled inner disc
+  // Two wins — a large, clearly-filled inner disc in the colours of the two actual wins
   if (state === 'partial-2') {
     return (
       <div className={`${base} ${todayRing} ${selectedRing}`} style={{ background: 'rgba(255,255,255,0.03)' }} onClick={onClick}>
-        <div className="absolute inset-[12%] rounded-full" style={{ background: 'rgba(255,255,255,0.32)' }} />
-        <span className={`relative z-10 font-sans ${textSize} text-white/75`}>{dayNum}</span>
+        <div className="absolute inset-[12%] rounded-full" style={{ background: buildConicGradient(completed), opacity: 0.85 }} />
+        <span className={`relative z-10 font-sans ${textSize} text-white/85`}>{dayNum}</span>
       </div>
     )
   }
 
-  // One win — a small ember, most of the cell stays open
+  // One win — a small ember in the colour of the actual win, most of the cell stays open
   if (state === 'partial-1') {
     return (
       <div className={`${base} ${todayRing} ${selectedRing}`} style={{ background: 'transparent' }} onClick={onClick}>
-        <div className="absolute inset-[36%] rounded-full" style={{ background: 'rgba(255,255,255,0.30)' }} />
-        <span className={`relative z-10 font-sans ${textSize} text-white/45`}>{dayNum}</span>
+        <div className="absolute inset-[36%] rounded-full" style={{ background: completed[0] ? CATEGORY_HEX[completed[0]] : 'rgba(255,255,255,0.30)', opacity: 0.85 }} />
+        <span className={`relative z-10 font-sans ${textSize} text-white/60`}>{dayNum}</span>
       </div>
     )
   }
@@ -356,14 +387,22 @@ function DayEditor({
   entry,
   labels,
   allDays,
+  bank,
   onConfirm,
+  onClearWin,
+  onSaveToBank,
+  onRemoveFromBank,
   onClear,
 }: {
   dateKey: string
   entry: DayEntry
   labels: Record<CategoryKey, { label: string; definition: string }>
   allDays: Record<string, DayEntry>
+  bank: Record<CategoryKey, string[]>
   onConfirm: (key: CategoryKey, text: string, reflection: string) => void
+  onClearWin: (key: CategoryKey) => void
+  onSaveToBank: (key: CategoryKey, text: string) => void
+  onRemoveFromBank: (key: CategoryKey, text: string) => void
   onClear: () => void
 }) {
   const date = new Date(dk + 'T12:00:00')
@@ -393,10 +432,15 @@ function DayEditor({
             key={key}
             categoryKey={key}
             label={labels[key].label}
+            definition={labels[key].definition}
             existing={entry[key]}
             pastWins={getPastWins(allDays, key, dk)}
             dailySuggestions={getDailySuggestions(key, dk)}
+            bank={bank[key]}
             onConfirm={(text, reflection) => onConfirm(key, text, reflection)}
+            onClear={() => onClearWin(key)}
+            onSaveToBank={text => onSaveToBank(key, text)}
+            onRemoveFromBank={text => onRemoveFromBank(key, text)}
           />
         ))}
       </div>
@@ -458,21 +502,20 @@ function BalanceBars({
   )
 }
 
+// Legend swatches use a representative pair/single of the actual category
+// colours (physical + mental for "two wins", physical for "one win") so the
+// legend reads consistently with how a real day's colours are built.
 function LegendItem({ state, label }: { state: DayState; label: string }) {
   return (
     <div className="flex items-center gap-2">
       {state === 'balanced' && (
-        <div className="w-3 h-3 rounded-full shrink-0" style={{ background: 'conic-gradient(#1D9E75 0deg, #7F77DD 120deg, #D85A30 240deg, #1D9E75 360deg)' }} />
+        <div className="w-3 h-3 rounded-full shrink-0" style={{ background: buildConicGradient(CATEGORIES) }} />
       )}
       {state === 'partial-2' && (
-        <div className="relative w-3 h-3 rounded-full shrink-0" style={{ background: 'rgba(255,255,255,0.03)' }}>
-          <div className="absolute inset-[12%] rounded-full" style={{ background: 'rgba(255,255,255,0.32)' }} />
-        </div>
+        <div className="w-3 h-3 rounded-full shrink-0" style={{ background: buildConicGradient(['physical', 'mental']), opacity: 0.85 }} />
       )}
       {state === 'partial-1' && (
-        <div className="relative w-3 h-3 rounded-full shrink-0">
-          <div className="absolute inset-[36%] rounded-full" style={{ background: 'rgba(255,255,255,0.30)' }} />
-        </div>
+        <div className="w-3 h-3 rounded-full shrink-0" style={{ background: CATEGORY_HEX.physical, opacity: 0.85 }} />
       )}
       {state === 'missed' && (
         <div className="w-3 h-3 rounded-full shrink-0" style={{ border: '1px solid rgba(255,255,255,0.15)' }} />
