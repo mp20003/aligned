@@ -739,7 +739,10 @@ function WeekConstellation({
 
   return (
     <div className="relative" onClick={handlePanelTap}>
-      <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0d0d1e' }}>
+      {/* Background matches the page (#0a0a14) exactly, rather than a
+          slightly-lighter shade, so the panel doesn't read as a separate
+          boxed widget sitting on top of the page. */}
+      <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0a0a14' }}>
         <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }}>
           <WeekBackgroundStars />
 
@@ -899,6 +902,7 @@ function UniversePanel({
   const containerRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<HoverInfo | null>(null)
   const centers = getClusterCenters(weeks, UNI_W, UNI_H, padding)
+  const totalStars = weeks.reduce((acc, w) => acc + getAlignedDates(w, days).length, 0)
 
   function handleClusterHover(e: React.MouseEvent, mondayStr: string, week: Date[]) {
     const rect = containerRef.current?.getBoundingClientRect()
@@ -913,7 +917,12 @@ function UniversePanel({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="font-sans text-xs uppercase tracking-widest text-white/25">Your universe</p>
+      <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
+        <p className="font-sans text-xs uppercase tracking-widest font-medium text-white/40">Your universe</p>
+        <p className="font-sans text-xs font-medium text-white/40">
+          {totalStars} star{totalStars !== 1 ? 's' : ''} across your journey
+        </p>
+      </div>
       <div className="relative">
         <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0a0a14' }}>
           <svg viewBox={`0 0 ${UNI_W} ${UNI_H}`} className="w-full">
@@ -977,6 +986,9 @@ function UniversePanel({
         </div>
         {hover && <HoverCard {...hover} />}
       </div>
+      <p className="font-serif text-sm text-white/30 italic text-center">
+        Each cluster is one week of your life — the brighter it glows, the more days you stayed aligned.
+      </p>
     </div>
   )
 }
@@ -1030,8 +1042,6 @@ export default function Pulse() {
   const { data } = useApp()
   const week = getCurrentWeek()
   const allWeeks = getAllWeeks(data.days)
-  const todayStr = dateKey(new Date())
-  const todayWins = getWins(data.days, todayStr)
   const weekAligned = getAlignedDates(week, data.days).length
   const elapsed = week.filter(d => !isFuture(d) && !isToday(d)).length
   const [expandedWeek, setExpandedWeek] = useState<Date[] | null>(null)
@@ -1046,8 +1056,8 @@ export default function Pulse() {
 
       {/* Header */}
       <div className="flex flex-col gap-1">
-        <p className="font-sans text-xs uppercase tracking-widest text-white/25">Triova</p>
-        <h1 className="font-serif text-2xl lg:text-4xl text-white">Your Triova</h1>
+        <p className="font-sans text-xs uppercase tracking-widest font-semibold text-white/40">Triova</p>
+        <h1 className="font-serif font-semibold text-2xl lg:text-4xl text-white">Your Triova</h1>
         <p className="font-sans text-xs text-white/30 leading-relaxed mt-1">
           Every win you log fires a supernova. Every star you birth is yours to keep.
         </p>
@@ -1060,30 +1070,19 @@ export default function Pulse() {
         {/* This week */}
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="font-sans text-xs uppercase tracking-widest text-white/25">
+            <p className="font-sans text-xs uppercase tracking-widest font-medium text-white/40">
               This week · {formatWeekRange(week)}
             </p>
-            <p className="font-sans text-xs text-white/25">
+            <p className="font-sans text-xs font-medium text-white/40">
               {weekAligned} star{weekAligned !== 1 ? 's' : ''} born · {elapsed} day{elapsed !== 1 ? 's' : ''} elapsed
             </p>
           </div>
 
           <WeekConstellation week={week} days={data.days} />
 
-          {todayWins < 3 && (
-            <p className="font-serif text-sm text-white/30 italic text-center">
-              {todayWins === 0
-                ? 'Log your first win today to birth a star.'
-                : todayWins === 1
-                ? "One win in. Two more and tonight's star ignites."
-                : 'Two wins in. One more to fire the supernova.'}
-            </p>
-          )}
-          {todayWins === 3 && (
-            <p className="font-serif text-sm text-white/50 italic text-center">
-              All three wins logged. Tonight's star is alive.
-            </p>
-          )}
+          <p className="font-serif text-sm text-white/30 italic text-center">
+            Each star is a day you aligned all three practices at once.
+          </p>
         </div>
 
         {/* Universe */}
