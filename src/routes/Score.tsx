@@ -739,10 +739,10 @@ function WeekConstellation({
 
   return (
     <div className="relative" onClick={handlePanelTap}>
-      {/* Background matches the page (#0a0a14) exactly, rather than a
+      {/* Background matches the page (#0f0f1a) exactly, rather than a
           slightly-lighter shade, so the panel doesn't read as a separate
           boxed widget sitting on top of the page. */}
-      <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0a0a14' }}>
+      <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0f0f1a' }}>
         <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }}>
           <WeekBackgroundStars />
 
@@ -916,7 +916,7 @@ function UniversePanel({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 lg:h-full">
       <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
         <p className="font-sans text-xs uppercase tracking-widest font-medium text-white/40">Your universe</p>
         <p className="font-sans text-xs font-medium text-white/40">
@@ -924,7 +924,7 @@ function UniversePanel({
         </p>
       </div>
       <div className="relative">
-        <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0a0a14' }}>
+        <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0f0f1a' }}>
           <svg viewBox={`0 0 ${UNI_W} ${UNI_H}`} className="w-full">
           <NebulaField />
           {weeks.map((week, wi) => {
@@ -986,6 +986,10 @@ function UniversePanel({
         </div>
         {hover && <HoverCard {...hover} />}
       </div>
+      {/* Mirrors the spacer in the This Week column so both captions land
+          on the same baseline regardless of which panel is intrinsically
+          taller. */}
+      <div className="hidden lg:block flex-1" />
       <p className="font-serif text-sm text-white/30 italic text-center">
         Each cluster is one week of your life — the brighter it glows, the more days you stayed aligned.
       </p>
@@ -1048,7 +1052,7 @@ export default function Pulse() {
 
   return (
     <div className="min-h-screen max-w-md lg:max-w-6xl mx-auto px-6 lg:px-10 pt-12 lg:pt-16 pb-28 flex flex-col gap-10"
-      style={{ background: '#0a0a14' }}>
+      style={{ background: '#0f0f1a' }}>
 
       {expandedWeek && (
         <ExpandedWeekModal week={expandedWeek} days={data.days} onClose={() => setExpandedWeek(null)} />
@@ -1066,9 +1070,9 @@ export default function Pulse() {
       {/* This week + Universe — stacked on mobile, side-by-side on desktop
           so the page uses the full width of a laptop screen instead of
           sitting in a narrow centered column. */}
-      <div className="flex flex-col gap-10 lg:grid lg:grid-cols-2 lg:gap-10 lg:items-start">
+      <div className="flex flex-col gap-10 lg:grid lg:grid-cols-2 lg:gap-10 lg:items-stretch">
         {/* This week */}
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 lg:h-full">
           <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
             <p className="font-sans text-xs uppercase tracking-widest font-medium text-white/40">
               This week · {formatWeekRange(week)}
@@ -1079,6 +1083,12 @@ export default function Pulse() {
           </div>
 
           <WeekConstellation week={week} days={data.days} />
+
+          {/* Flexible spacer: when this column is stretched taller than its
+              own content (to match the Universe column), this absorbs the
+              extra space so the caption still lands on the same baseline
+              as the Universe caption instead of hugging the panel above it. */}
+          <div className="hidden lg:block flex-1" />
 
           <p className="font-serif text-sm text-white/30 italic text-center">
             Each star is a day you aligned all three practices at once.
