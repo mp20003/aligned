@@ -147,13 +147,13 @@ export default function Onboarding() {
               <div className="w-full h-full rounded-full bg-beige" />
             </div>
             <p className="font-serif text-base text-charcoal/75 leading-relaxed">
-              A daily practice, not a task list. One honest win in each part of you — physical, mental, spiritual — nothing more. Small enough to do on your worst day, which is exactly the point.
+              This isn't a task list. One honest win a day, across three parts of you: physical, mental, spiritual. That's the whole practice.
             </p>
             <p className="font-serif text-base text-charcoal/75 leading-relaxed">
-              <em>Tri</em>, for the three parts of you. <em>Nova</em>, for what happens when they align — a sudden burst of light. One aligned day fires a single nova. It's small. It's supposed to be.
+              <em>Tri</em> because there are three parts of you. <em>Nova</em> because of what happens when they line up: a small burst of light. It's meant to be small.
             </p>
             <p className="font-serif text-base text-charcoal/75 leading-relaxed">
-              No single win changes much. But keep firing them, day after day, and they stop being single — they become a week, then a cluster, then a universe that's unmistakably yours. Not a big leap. Just showing up small and often enough that it adds up without you having to force it.
+              One win alone won't change much. Keep going and it does. Days become weeks, weeks become a universe you can watch grow. And it's not just happening on this screen. You're building the same thing in your actual life, one small win at a time. <strong className="font-semibold text-charcoal">Welcome to Triova.</strong>
             </p>
           </div>
 
