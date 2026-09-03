@@ -117,11 +117,16 @@ function getPartialDates(week: Date[], days: DaysMap): Date[] {
   })
 }
 
+// A real missed day never actually gets a stored entry (logWin always sets
+// at least one category; clearDay/clearWin delete the day rather than
+// nulling it out), so this can't require days[dk] !== undefined — that
+// condition is structurally almost unreachable and was silently hiding
+// every genuinely-missed day from the Universe view. Matches the simpler
+// check WeekConstellation already uses for the dust-explosion animation.
 function getDeadDates(week: Date[], days: DaysMap): Date[] {
   return week.filter(d => {
     if (isFuture(d) || isToday(d)) return false
-    const dk = dateKey(d)
-    return getWins(days, dk) === 0 && days[dk] !== undefined
+    return getWins(days, dateKey(d)) === 0
   })
 }
 

@@ -10,14 +10,80 @@
  */
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router'
 import { useApp } from '../context/AppContext'
 import { getDailySuggestions, getPastWins } from '../data/suggestions'
 import WinCard, { ACCENT } from '../components/WinCard'
 import { dateKey } from '../lib/date'
 import type { CategoryKey, WinEntry } from '../types'
 
+// Same key AppContext clears on resetPractice/restoreData/signOut and on any
+// date-level mutation — keep this string in sync with MISSED_PROMPT_KEY there.
+const MISSED_PROMPT_KEY = 'triova-missed-prompted'
+
+function getMissedPromptSet(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(MISSED_PROMPT_KEY) ?? '[]')) }
+  catch { return new Set() }
+}
+
+function markMissedPrompted(dateStr: string) {
+  const set = getMissedPromptSet()
+  set.add(dateStr)
+  localStorage.setItem(MISSED_PROMPT_KEY, JSON.stringify([...set]))
+}
+
 function todayKey() {
   return dateKey(new Date())
+}
+
+// Portaled straight to <body>: the page-transition wrapper around every
+// route applies a persistent transform after its enter animation finishes,
+// which per the CSS spec becomes the containing block for any
+// position:fixed descendant — a plain fixed overlay here would render
+// trapped behind the (also fixed) nav bar instead of above it.
+function MissedDayModal({ dateStr, onFix, onDismiss }: { dateStr: string; onFix: () => void; onDismiss: () => void }) {
+  const formatted = new Date(dateStr + 'T12:00:00').toLocaleDateString('default', {
+    weekday: 'long', month: 'long', day: 'numeric',
+  })
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-6"
+      style={{ background: 'rgba(5,5,12,0.88)' }}
+      onClick={onDismiss}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl px-6 py-6 flex flex-col gap-4"
+        style={{ background: 'rgba(15,15,26,0.98)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 12px 32px rgba(0,0,0,0.5)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex flex-col gap-1">
+          <p className="font-sans text-xs uppercase tracking-widest text-white/30">{formatted}</p>
+          <h2 className="font-serif text-xl text-white">Yesterday's a blank.</h2>
+        </div>
+        <p className="font-sans text-sm text-white/50 leading-relaxed">
+          No wins logged. If that's just how the day went, there's nothing to do here. But if you forgot to record it, you can still add it.
+        </p>
+        <div className="flex flex-col gap-2 mt-1">
+          <button
+            onClick={onFix}
+            className="w-full py-3 rounded-xl font-sans text-sm text-white btn-lift"
+            style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}
+          >
+            I forgot, let me add it
+          </button>
+          <button
+            onClick={onDismiss}
+            className="w-full py-2 font-sans text-xs text-white/30 hover:text-white/55 transition-colors"
+          >
+            That's how the day went
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
 }
 
 function formatDateLabel(dateStr: string): string {
@@ -28,6 +94,7 @@ function formatDateLabel(dateStr: string): string {
 
 export default function Today() {
   const { data, logWin, clearWin, addToBank, removeFromBank } = useApp()
+  const navigate = useNavigate()
 
   const date = todayKey()
   const entry = data.days[date] ?? { physical: null, mental: null, spiritual: null }
@@ -41,6 +108,32 @@ export default function Today() {
   const [sundayDone, setSundayDone] = useState(() => !!localStorage.getItem(sundayCheckinKey))
   const [aligned, setAligned] = useState(allDone)
   const [fading, setFading] = useState(false)
+
+  // If yesterday was completely missed and the user hasn't been asked about
+  // it yet, offer a chance to fix it before its star quietly explodes on
+  // the Triova page. Decided once per mount — a fresh load re-evaluates it.
+  const [missedPrompt] = useState<string | null>(() => {
+    if (Object.keys(data.days).length === 0) return null // brand new account, nothing to have missed
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yKey = dateKey(yesterday)
+    const yEntry = data.days[yKey]
+    const yWins = yEntry ? (['physical', 'mental', 'spiritual'] as CategoryKey[]).filter(k => yEntry[k] !== null).length : 0
+    if (yWins > 0) return null
+    return getMissedPromptSet().has(yKey) ? null : yKey
+  })
+  const [missedPromptOpen, setMissedPromptOpen] = useState(missedPrompt !== null)
+
+  function handleDismissMissed() {
+    if (missedPrompt) markMissedPrompted(missedPrompt)
+    setMissedPromptOpen(false)
+  }
+
+  function handleFixMissed() {
+    if (!missedPrompt) return
+    markMissedPrompted(missedPrompt)
+    navigate('/history', { state: { selectDate: missedPrompt } })
+  }
 
   function handleWinLogged(justLogged: CategoryKey) {
     const others = (['physical', 'mental', 'spiritual'] as CategoryKey[]).filter(k => k !== justLogged)
@@ -56,14 +149,21 @@ export default function Today() {
     setSundayDone(true)
   }
 
+  const missedModal = missedPrompt && missedPromptOpen && (
+    <MissedDayModal dateStr={missedPrompt} onFix={handleFixMissed} onDismiss={handleDismissMissed} />
+  )
+
   if (aligned) {
     return (
-      <AlignedState
-        date={date}
-        categories={categories}
-        todayEntry={entry}
-        onEdit={() => setAligned(false)}
-      />
+      <>
+        {missedModal}
+        <AlignedState
+          date={date}
+          categories={categories}
+          todayEntry={entry}
+          onEdit={() => setAligned(false)}
+        />
+      </>
     )
   }
 
@@ -76,6 +176,7 @@ export default function Today() {
         transition: 'opacity 0.45s ease, transform 0.45s ease',
       }}
     >
+      {missedModal}
       {/* Header */}
       <div className="flex flex-col gap-1 pt-4">
         <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Today</p>

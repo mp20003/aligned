@@ -8,7 +8,8 @@
  * Never shows streaks, percentages as goals, or failure language.
  */
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { useLocation } from 'react-router'
 import { useApp } from '../context/AppContext'
 import { getDailySuggestions, getPastWins } from '../data/suggestions'
 import WinCard from '../components/WinCard'
@@ -209,8 +210,19 @@ export default function History() {
   const { data, logWin, clearWin, clearDay, addToBank, removeFromBank } = useApp()
   const days30 = getLast30Days()
   const todayStr = dateKey(new Date())
-  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const location = useLocation()
+  // Arriving from the "did you forget yesterday?" prompt on Today passes the
+  // date to jump straight to via navigate state, instead of landing on the
+  // grid with nothing selected.
+  const jumpToDate = (location.state as { selectDate?: string } | null)?.selectDate ?? null
+  const [selectedKey, setSelectedKey] = useState<string | null>(jumpToDate)
   const shareRef = useRef<HTMLAnchorElement>(null)
+  const editorRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (jumpToDate) editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function handleShare() {
     const dataUrl = generateShareCard(data.days, days30, data.onboarding.name)
@@ -295,7 +307,7 @@ export default function History() {
         </div>
 
         {/* Side panel */}
-        <div className="flex flex-col gap-6 lg:gap-8 flex-1">
+        <div ref={editorRef} className="flex flex-col gap-6 lg:gap-8 flex-1">
           {generateInsight(data.days, data.onboarding.categories, days30) && (
             <div className="border-t lg:border-t-0 pt-5 lg:pt-0 flex flex-col gap-1" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
               <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/25">Pattern</p>

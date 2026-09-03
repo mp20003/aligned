@@ -35,16 +35,19 @@ function saveLocal(data: AppData) {
 }
 
 // The Triova screen tracks "has this date already exploded into dust /
-// already birthed its star" as one-time flags in these two localStorage
-// sets, so the animation only ever plays once per date. Nothing else in
-// the app knows about them — so whenever days are wiped or cleared here,
-// their flags have to be wiped too, or a date can stay "dead"/"born"
-// forever even after its wins are deleted and relogged.
+// already birthed its star" as one-time flags in these localStorage sets,
+// so the animation only ever plays once per date. Today also tracks "has
+// the user already been asked about this missed date" the same way, so the
+// prompt doesn't nag on every load. Nothing else in the app knows about
+// them — so whenever days are wiped or cleared here, their flags have to be
+// wiped too, or a date can stay "dead"/"born"/"already asked about" forever
+// even after its wins are deleted and relogged.
 const DUST_KEY = 'triova-dusts'
 const BORN_KEY = 'triova-born'
+const MISSED_PROMPT_KEY = 'triova-missed-prompted'
 
 function clearDateFlags(predicate: (dateStr: string) => boolean) {
-  for (const storageKey of [DUST_KEY, BORN_KEY]) {
+  for (const storageKey of [DUST_KEY, BORN_KEY, MISSED_PROMPT_KEY]) {
     try {
       const raw = localStorage.getItem(storageKey)
       if (!raw) continue
@@ -208,14 +211,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const resetPractice = useCallback(() => {
     localStorage.removeItem(DUST_KEY)
     localStorage.removeItem(BORN_KEY)
+    localStorage.removeItem(MISSED_PROMPT_KEY)
     update({ ...dataRef.current, days: {} })
   }, [update])
 
   const restoreData = useCallback((imported: AppData) => {
-    // Imported days may not match this device's dust/born flags at all — drop them
-    // so Triova re-evaluates every date fresh against the restored data.
+    // Imported days may not match this device's dust/born/prompted flags at
+    // all — drop them so Triova re-evaluates every date fresh against the
+    // restored data.
     localStorage.removeItem(DUST_KEY)
     localStorage.removeItem(BORN_KEY)
+    localStorage.removeItem(MISSED_PROMPT_KEY)
     update({ ...imported, bank: imported.bank ?? defaultData.bank })
   }, [update])
 
@@ -240,6 +246,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     saveLocal(defaultData)
     localStorage.removeItem(DUST_KEY)
     localStorage.removeItem(BORN_KEY)
+    localStorage.removeItem(MISSED_PROMPT_KEY)
   }, [])
 
   return (
