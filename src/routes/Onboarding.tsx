@@ -138,8 +138,9 @@ export default function Onboarding() {
           </div>
 
           {/* What Triova is, what the name means, and why the practice compounds —
-              told as one continuous story rather than separate labelled blocks. */}
-          <div className="flex flex-col gap-4 max-w-xs">
+              four short standalone beats with real space between them, rather
+              than dense explanatory paragraphs. */}
+          <div className="flex flex-col gap-7 max-w-xs">
             <div
               className="animate-soft-pulse w-10 h-10 rounded-full mx-auto p-0.5"
               style={{ background: 'conic-gradient(#1D9E75 0deg, #7F77DD 120deg, #D85A30 240deg, #1D9E75 360deg)' }}
@@ -147,13 +148,16 @@ export default function Onboarding() {
               <div className="w-full h-full rounded-full bg-beige" />
             </div>
             <p className="font-serif text-base text-charcoal/75 leading-relaxed">
-              This isn't a task list. One honest win a day, across three parts of you: physical, mental, spiritual. That's the whole practice.
+              Not a task list. One honest win, three parts of you.
             </p>
             <p className="font-serif text-base text-charcoal/75 leading-relaxed">
-              <em>Tri</em> because there are three parts of you. <em>Nova</em> because of what happens when they line up: a small burst of light. It's meant to be small.
+              <em>Tri</em>. <em>Nova</em>. A small burst of light, every time they align.
             </p>
             <p className="font-serif text-base text-charcoal/75 leading-relaxed">
-              One win alone won't change much. Keep going and it does. Days become weeks, weeks become a universe you can watch grow. And it's not just happening on this screen. You're building the same thing in your actual life, one small win at a time. <strong className="font-semibold text-charcoal">Welcome to Triova.</strong>
+              Small and steady adds up, in the app and in your life.
+            </p>
+            <p className="font-serif text-lg text-charcoal font-semibold">
+              Welcome to Triova.
             </p>
           </div>
 
