@@ -88,6 +88,7 @@ export default function WinCard({
   const [reflecting, setReflecting] = useState(false)
   const [skipped, setSkipped] = useState(false)
   const [confirmFlash, setConfirmFlash] = useState(false)
+  const [previouslyOpen, setPreviouslyOpen] = useState(false)
   const accent = ACCENT[categoryKey]
   const trimmedValue = value.trim()
 
@@ -173,7 +174,7 @@ export default function WinCard({
   }
 
   return (
-    <div className="surface rounded-2xl px-5 lg:px-6 py-4 lg:py-5 flex flex-col gap-3">
+    <div className="surface rounded-2xl px-5 lg:px-6 py-4 lg:py-5 flex flex-col gap-3 h-full">
       <CategoryLabel label={label} definition={definition} accentText={accent.text} />
 
       {/* Example */}
@@ -235,28 +236,50 @@ export default function WinCard({
         </div>
       )}
 
-      {/* Past wins */}
+      {/* Past wins — collapsed by default so a long history doesn't bunch
+          the card up; opens into the same chip list as before. */}
       {pastWins.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <p className="font-sans text-xs lg:text-sm text-white/20 uppercase tracking-widest">Previously</p>
-          <div className="flex flex-wrap gap-2">
-            {pastWins.map(w => (
-              <button
-                key={w}
-                onClick={() => setValue(w)}
-                className={`px-3 py-1.5 rounded-full font-sans text-xs lg:text-sm transition-all duration-150 chip-press ${
-                  value === w
-                    ? `${accent.bg} text-white border-transparent shadow-sm`
-                    : 'text-white/40 hover:text-white/70'
-                }`}
-                style={value === w ? {} : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
-              >
-                {w}
-              </button>
-            ))}
-          </div>
+          <button
+            type="button"
+            onClick={() => setPreviouslyOpen(v => !v)}
+            className="flex items-center gap-1.5 font-sans text-xs lg:text-sm text-white/20 uppercase tracking-widest hover:text-white/40 transition-colors"
+          >
+            <span>Previously ({pastWins.length})</span>
+            <svg
+              width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+              strokeLinecap="round" strokeLinejoin="round"
+              className={`shrink-0 transition-transform duration-150 ${previouslyOpen ? 'rotate-180' : ''}`}
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+          {previouslyOpen && (
+            <div className="flex flex-wrap gap-2">
+              {pastWins.map(w => (
+                <button
+                  key={w}
+                  onClick={() => setValue(w)}
+                  className={`px-3 py-1.5 rounded-full font-sans text-xs lg:text-sm transition-all duration-150 chip-press ${
+                    value === w
+                      ? `${accent.bg} text-white border-transparent shadow-sm`
+                      : 'text-white/40 hover:text-white/70'
+                  }`}
+                  style={value === w ? {} : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+                >
+                  {w}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
+
+      {/* Absorbs whatever extra height this card was stretched to (to match
+          its taller siblings in the row), so the textarea + button row below
+          docks to the same bottom edge on every category's card instead of
+          floating right under whatever variable content is above it. */}
+      <div className="flex-1" />
 
       {/* Free text */}
       <textarea
