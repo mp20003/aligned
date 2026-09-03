@@ -137,7 +137,8 @@ export default function Onboarding() {
             </h1>
           </div>
 
-          {/* Pulse introduction */}
+          {/* What Triova is, what the name means, and why the practice compounds —
+              told as one continuous story rather than separate labelled blocks. */}
           <div className="flex flex-col gap-4 max-w-xs">
             <div
               className="animate-soft-pulse w-10 h-10 rounded-full mx-auto p-0.5"
@@ -145,20 +146,21 @@ export default function Onboarding() {
             >
               <div className="w-full h-full rounded-full bg-beige" />
             </div>
-            <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">Meet Triova</p>
             <p className="font-serif text-base text-charcoal/75 leading-relaxed">
-              Triova is not an AI. It's a presence — the quiet part of you that already knows what you need.
+              A daily practice, not a task list. One honest win in each part of you — physical, mental, spiritual — nothing more. Small enough to do on your worst day, which is exactly the point.
             </p>
             <p className="font-serif text-base text-charcoal/75 leading-relaxed">
-              It watches your practice without judgment. Every day, it speaks to what it sees in you.
+              <em>Tri</em>, for the three parts of you. <em>Nova</em>, for what happens when they align — a sudden burst of light. One aligned day fires a single nova. It's small. It's supposed to be.
             </p>
-            <p className="font-sans text-xs text-charcoal/30 uppercase tracking-widest">It has always been there.</p>
+            <p className="font-serif text-base text-charcoal/75 leading-relaxed">
+              No single win changes much. But keep firing them, day after day, and they stop being single — they become a week, then a cluster, then a universe that's unmistakably yours. Not a big leap. Just showing up small and often enough that it adds up without you having to force it.
+            </p>
           </div>
 
           {/* Name field */}
           <div className="flex flex-col gap-2 w-full max-w-xs">
             <label className="font-sans text-xs uppercase tracking-widest text-charcoal/40">
-              What should Triova call you?
+              What should we call you?
             </label>
             <input
               type="text"
