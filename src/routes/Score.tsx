@@ -190,7 +190,7 @@ function HoverCard({ x, y, title, subtitle }: HoverInfo) {
       }}
     >
       <span className="font-serif text-sm text-white whitespace-nowrap">{title}</span>
-      <span className="font-sans text-[10px] uppercase tracking-widest text-white/35 whitespace-nowrap">{subtitle}</span>
+      <span className="font-sans text-[10px] uppercase tracking-widest text-white/50 whitespace-nowrap">{subtitle}</span>
     </div>
   )
 }
@@ -746,7 +746,7 @@ function WeekConstellation({
           slightly-lighter shade, so the panel doesn't read as a separate
           boxed widget sitting on top of the page. */}
       <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0f0f1a' }}>
-        <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }}>
+        <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }} aria-hidden="true">
           <WeekBackgroundStars />
 
           {/* Constellation lines */}
@@ -921,14 +921,14 @@ function UniversePanel({
   return (
     <div className="flex flex-col gap-3 lg:h-full">
       <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
-        <p className="font-sans text-xs uppercase tracking-widest font-medium text-white/40">Your universe</p>
-        <p className="font-sans text-xs font-medium text-white/40">
+        <p className="font-sans text-xs uppercase tracking-widest font-medium text-white/50">Your universe</p>
+        <p className="font-sans text-xs font-medium text-white/50">
           {totalStars} star{totalStars !== 1 ? 's' : ''} across your journey
         </p>
       </div>
       <div className="relative">
         <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0f0f1a' }}>
-          <svg viewBox={`0 0 ${UNI_W} ${UNI_H}`} className="w-full">
+          <svg viewBox={`0 0 ${UNI_W} ${UNI_H}`} className="w-full" aria-hidden="true">
           <NebulaField />
           {weeks.map((week, wi) => {
             const isCurrent = wi === weeks.length - 1
@@ -993,7 +993,7 @@ function UniversePanel({
           on the same baseline regardless of which panel is intrinsically
           taller. */}
       <div className="hidden lg:block flex-1" />
-      <p className="font-serif text-sm text-white/30 italic text-center">
+      <p className="font-serif text-sm text-white/50 italic text-center">
         Each cluster is one week of your life — the brighter it glows, the more days you stayed aligned.
       </p>
     </div>
@@ -1028,7 +1028,7 @@ function ExpandedWeekModal({
       <div className="w-full max-w-md lg:max-w-xl flex flex-col gap-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-0.5">
-            <p className="font-sans text-xs uppercase tracking-widest text-white/35">{getClusterName(mondayStr)}</p>
+            <p className="font-sans text-xs uppercase tracking-widest text-white/50">{getClusterName(mondayStr)}</p>
             <h2 className="font-serif text-xl lg:text-2xl text-white">{formatWeekRange(week)}</h2>
           </div>
           <button
@@ -1063,9 +1063,9 @@ export default function Pulse() {
 
       {/* Header */}
       <div className="flex flex-col gap-1">
-        <p className="font-sans text-xs uppercase tracking-widest font-semibold text-white/40">Triova</p>
+        <p className="font-sans text-xs uppercase tracking-widest font-semibold text-white/50">Triova</p>
         <h1 className="font-serif font-semibold text-2xl lg:text-4xl text-white">Your Triova</h1>
-        <p className="font-sans text-xs text-white/30 leading-relaxed mt-1">
+        <p className="font-sans text-xs text-white/50 leading-relaxed mt-1">
           Every win you log fires a supernova. Every star you birth is yours to keep.
         </p>
       </div>
@@ -1077,10 +1077,10 @@ export default function Pulse() {
         {/* This week */}
         <div className="flex flex-col gap-3 lg:h-full">
           <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="font-sans text-xs uppercase tracking-widest font-medium text-white/40">
+            <p className="font-sans text-xs uppercase tracking-widest font-medium text-white/50">
               This week · {formatWeekRange(week)}
             </p>
-            <p className="font-sans text-xs font-medium text-white/40">
+            <p className="font-sans text-xs font-medium text-white/50">
               {weekAligned} star{weekAligned !== 1 ? 's' : ''} born · {elapsed} day{elapsed !== 1 ? 's' : ''} elapsed
             </p>
           </div>
@@ -1093,7 +1093,7 @@ export default function Pulse() {
               as the Universe caption instead of hugging the panel above it. */}
           <div className="hidden lg:block flex-1" />
 
-          <p className="font-serif text-sm text-white/30 italic text-center">
+          <p className="font-serif text-sm text-white/50 italic text-center">
             Each star is a day you aligned all three practices at once.
           </p>
         </div>

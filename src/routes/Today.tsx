@@ -74,7 +74,7 @@ function MissedDayModal({ dateStr, onFix, onDismiss }: { dateStr: string; onFix:
         onClick={e => e.stopPropagation()}
       >
         <div className="flex flex-col gap-1">
-          <p className="font-sans text-xs uppercase tracking-widest text-white/30">{formatted}</p>
+          <p className="font-sans text-xs uppercase tracking-widest text-white/50">{formatted}</p>
           <h2 className="font-serif text-xl text-white">Yesterday's a blank.</h2>
         </div>
         <p className="font-sans text-sm text-white/50 leading-relaxed">
@@ -90,7 +90,7 @@ function MissedDayModal({ dateStr, onFix, onDismiss }: { dateStr: string; onFix:
           </button>
           <button
             onClick={onDismiss}
-            className="w-full py-2 font-sans text-xs text-white/30 hover:text-white/55 transition-colors"
+            className="w-full py-2 font-sans text-xs text-white/50 hover:text-white/80 transition-colors"
           >
             That's how the day went
           </button>
@@ -207,8 +207,8 @@ export default function Today() {
       {missedModal}
       {/* Header */}
       <div className="flex flex-col gap-1 pt-4">
-        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Today</p>
-        <p className="font-sans text-xs lg:text-sm text-white/25">{formatDateLabel(date)}</p>
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">Today</p>
+        <p className="font-sans text-xs lg:text-sm text-white/50">{formatDateLabel(date)}</p>
         <h1 className="font-serif text-2xl lg:text-4xl text-white leading-snug mt-1">
           What were your three wins today?
         </h1>
@@ -217,7 +217,7 @@ export default function Today() {
       {/* First-day welcome */}
       {isFirstDay && (
         <div className="surface rounded-2xl px-5 lg:px-6 py-4 lg:py-5 flex flex-col gap-2">
-          <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Day one</p>
+          <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">Day one</p>
           <p className="font-serif text-sm lg:text-base text-white/60 leading-relaxed">
             This is where it begins. Three wins — one for each part of you. There's no right answer, only an honest one.
           </p>
@@ -231,16 +231,16 @@ export default function Today() {
         <div className="surface rounded-2xl px-5 lg:px-6 py-4 lg:py-5 flex flex-col gap-3">
           {justAnswered ? (
             <div className="flex flex-col gap-0.5">
-              <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">This week</p>
+              <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">This week</p>
               <p className="font-serif text-sm lg:text-base text-white/60">Noted — thank you for the honesty.</p>
             </div>
           ) : (
             <>
               <div className="flex flex-col gap-0.5">
-                <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">This week</p>
+                <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">This week</p>
                 <p className="font-serif text-sm lg:text-base text-white/60">Which part of you felt hardest to show up for?</p>
                 {lastWeekAnswer && (
-                  <p className="font-sans text-xs text-white/25 mt-1">
+                  <p className="font-sans text-xs text-white/50 mt-1">
                     Last week, you said {categories[lastWeekAnswer].label.toLowerCase()}.
                   </p>
                 )}
@@ -259,7 +259,7 @@ export default function Today() {
               </div>
               <button
                 onClick={handleSkipWeeklyCheckin}
-                className="font-sans text-xs text-white/25 hover:text-white/45 transition-colors self-start"
+                className="font-sans text-xs text-white/50 hover:text-white/80 transition-colors self-start"
               >
                 Skip this week
               </button>
@@ -302,7 +302,7 @@ function WinsProgress({ todayEntry }: { todayEntry: DayEntry }) {
   const done = [todayEntry.physical, todayEntry.mental, todayEntry.spiritual].filter(Boolean).length
   if (done === 0) return null
   return (
-    <p className="font-sans text-xs lg:text-sm text-white/25 text-center">
+    <p className="font-sans text-xs lg:text-sm text-white/50 text-center">
       {done === 1 && 'One win logged. Two more to align.'}
       {done === 2 && 'Two wins logged. One more to align.'}
     </p>
@@ -338,7 +338,7 @@ function AlignedState({ date, categories, todayEntry, onEdit }: AlignedStateProp
       </div>
 
       <div className="flex flex-col items-center gap-2 text-center">
-        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">{formatted}</p>
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">{formatted}</p>
         <h2 className="font-serif text-3xl lg:text-4xl text-white">You're aligned today.</h2>
         <p className="font-sans text-sm lg:text-base text-white/45 max-w-xs lg:max-w-sm leading-relaxed">
           You showed up for your {categories.physical.label.toLowerCase()},{' '}
@@ -360,7 +360,7 @@ function AlignedState({ date, categories, todayEntry, onEdit }: AlignedStateProp
                     {categories[key].label}
                   </span>
                   {win.reflection && (
-                    <span className="font-sans text-xs lg:text-sm text-white/25">{win.reflection}</span>
+                    <span className="font-sans text-xs lg:text-sm text-white/50">{win.reflection}</span>
                   )}
                 </div>
                 <p className="font-serif text-base lg:text-lg text-white/90 leading-snug">{win.text}</p>
@@ -372,7 +372,7 @@ function AlignedState({ date, categories, todayEntry, onEdit }: AlignedStateProp
 
       <button
         onClick={onEdit}
-        className="font-sans text-xs lg:text-sm text-white/25 underline underline-offset-4 hover:text-white/45 transition-colors"
+        className="font-sans text-xs lg:text-sm text-white/50 underline underline-offset-4 hover:text-white/80 transition-colors"
       >
         Edit today's wins
       </button>

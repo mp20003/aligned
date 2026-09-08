@@ -240,20 +240,21 @@ export default function History() {
   for (let i = 0; i < padded.length; i += 7) weeks.push(padded.slice(i, i + 7))
 
   const selectedEntry = selectedKey ? data.days[selectedKey] ?? { physical: null, mental: null, spiritual: null } : null
+  const insight = generateInsight(data.days, data.onboarding.categories, days30)
 
   return (
     <div className="min-h-screen max-w-md lg:max-w-6xl mx-auto px-6 lg:px-10 pt-12 lg:pt-16 pb-28 flex flex-col gap-8 lg:gap-10">
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1">
-          <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">History</p>
+          <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">History</p>
           <h1 className="font-serif text-2xl lg:text-4xl text-white">Last 30 days</h1>
         </div>
         <button
           onClick={handleShare}
-          className="mt-2 text-white/20 hover:text-white/50 transition-colors"
+          className="mt-2 text-white/50 hover:text-white/80 transition-colors"
           aria-label="Share"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="lg:w-6 lg:h-6">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="lg:w-6 lg:h-6" aria-hidden="true">
             <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
             <polyline points="16 6 12 2 8 6" />
             <line x1="12" y1="2" x2="12" y2="15" />
@@ -267,7 +268,7 @@ export default function History() {
         <div className="flex flex-col gap-2 lg:gap-3 lg:w-[420px] lg:shrink-0">
           <div className="grid grid-cols-7 gap-1 lg:gap-3">
             {DAYS.map((d, i) => (
-              <div key={i} className="text-center font-sans text-xs lg:text-sm text-white/25">{d}</div>
+              <div key={i} className="text-center font-sans text-xs lg:text-sm text-white/50">{d}</div>
             ))}
           </div>
 
@@ -287,6 +288,7 @@ export default function History() {
                       state={state}
                       completed={getCompletedCategories(data.days, day)}
                       dayNum={dayNum}
+                      dateLabel={day.toLocaleDateString('default', { month: 'long', day: 'numeric' })}
                       isToday={isToday}
                       isSelected={isSelected}
                       onClick={() => setSelectedKey(isSelected ? null : key)}
@@ -308,11 +310,11 @@ export default function History() {
 
         {/* Side panel */}
         <div ref={editorRef} className="flex flex-col gap-6 lg:gap-8 flex-1">
-          {generateInsight(data.days, data.onboarding.categories, days30) && (
+          {insight && (
             <div className="border-t lg:border-t-0 pt-5 lg:pt-0 flex flex-col gap-1" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-              <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/25">Pattern</p>
+              <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/45">Pattern</p>
               <p className="font-serif text-base lg:text-lg text-white/55 leading-relaxed">
-                {generateInsight(data.days, data.onboarding.categories, days30)}
+                {insight}
               </p>
             </div>
           )}
@@ -333,7 +335,7 @@ export default function History() {
               onClear={() => clearDay(selectedKey)}
             />
           ) : (
-            <p className="hidden lg:block font-sans text-sm lg:text-base text-white/20 italic">
+            <p className="hidden lg:block font-sans text-sm lg:text-base text-white/50 italic">
               Click any day to log or edit wins for it.
             </p>
           )}
@@ -343,54 +345,88 @@ export default function History() {
   )
 }
 
+const STATE_LABEL: Record<DayState, string> = {
+  balanced: 'all three wins logged',
+  'partial-2': 'two wins logged',
+  'partial-1': 'one win logged',
+  missed: 'no wins logged',
+}
+
 function Cell({
-  state, completed, dayNum, isToday, isSelected, onClick,
+  state, completed, dayNum, dateLabel, isToday, isSelected, onClick,
 }: {
-  state: DayState; completed: CategoryKey[]; dayNum: number; isToday: boolean; isSelected: boolean; onClick: () => void
+  state: DayState; completed: CategoryKey[]; dayNum: number; dateLabel: string; isToday: boolean; isSelected: boolean; onClick: () => void
 }) {
+  // A day cell has to be a real <button>, not a clickable <div> — otherwise
+  // keyboard and screen-reader users can't select a day at all, not even a
+  // contrast problem, just not operable.
   const base = 'relative w-9 h-9 lg:w-12 lg:h-12 rounded-full flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95'
   const selectedRing = isSelected ? 'ring-2 ring-offset-2 ring-white/50' : ''
-  const todayRing = isToday && !isSelected ? 'ring-1 ring-white/20' : ''
+  const todayRing = isToday && !isSelected ? 'ring-1 ring-white/40' : ''
   const textSize = 'text-xs lg:text-sm'
+  const ariaLabel = `${dateLabel}${isToday ? ', today' : ''} — ${STATE_LABEL[state]}`
 
   if (state === 'balanced') {
     return (
-      <div
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        aria-current={isToday ? 'date' : undefined}
         className={`${base} ${todayRing} ${selectedRing}`}
         style={{ background: buildConicGradient(completed) }}
         onClick={onClick}
       >
         <span className={`relative z-10 font-sans ${textSize} font-medium text-white`}>{dayNum}</span>
-      </div>
+      </button>
     )
   }
 
   // Two wins — a large, clearly-filled inner disc in the colours of the two actual wins
   if (state === 'partial-2') {
     return (
-      <div className={`${base} ${todayRing} ${selectedRing}`} style={{ background: 'rgba(255,255,255,0.03)' }} onClick={onClick}>
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        aria-current={isToday ? 'date' : undefined}
+        className={`${base} ${todayRing} ${selectedRing}`}
+        style={{ background: 'rgba(255,255,255,0.03)' }}
+        onClick={onClick}
+      >
         <div className="absolute inset-[12%] rounded-full" style={{ background: buildConicGradient(completed), opacity: 0.85 }} />
         <span className={`relative z-10 font-sans ${textSize} text-white/85`}>{dayNum}</span>
-      </div>
+      </button>
     )
   }
 
   // One win — a small ember in the colour of the actual win, most of the cell stays open
   if (state === 'partial-1') {
     return (
-      <div className={`${base} ${todayRing} ${selectedRing}`} style={{ background: 'transparent' }} onClick={onClick}>
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        aria-current={isToday ? 'date' : undefined}
+        className={`${base} ${todayRing} ${selectedRing}`}
+        style={{ background: 'transparent' }}
+        onClick={onClick}
+      >
         <div className="absolute inset-[36%] rounded-full" style={{ background: completed[0] ? CATEGORY_HEX[completed[0]] : 'rgba(255,255,255,0.30)', opacity: 0.85 }} />
         <span className={`relative z-10 font-sans ${textSize} text-white/60`}>{dayNum}</span>
-      </div>
+      </button>
     )
   }
 
   // Missed — genuinely blank, just a faint boundary so the cell still reads as a day
   return (
-    <div className={`${base} ${todayRing} ${selectedRing}`}
-      style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.07)' }} onClick={onClick}>
-      <span className={`font-sans ${textSize} text-white/15`}>{dayNum}</span>
-    </div>
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      aria-current={isToday ? 'date' : undefined}
+      className={`${base} ${todayRing} ${selectedRing}`}
+      style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.07)' }}
+      onClick={onClick}
+    >
+      <span className={`font-sans ${textSize} text-white/50`}>{dayNum}</span>
+    </button>
   )
 }
 
@@ -428,11 +464,11 @@ function DayEditor({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">{formatted}</p>
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">{formatted}</p>
         {hasAnyWin && (
           <button
             onClick={handleClear}
-            className="font-sans text-xs text-white/25 hover:text-white/60 transition-colors underline underline-offset-2"
+            className="font-sans text-xs text-white/50 hover:text-white/80 transition-colors underline underline-offset-2"
           >
             Clear day
           </button>
@@ -490,7 +526,7 @@ function BalanceBars({
 
   return (
     <div className="flex flex-col gap-3 lg:gap-4">
-      <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/25">Balance</p>
+      <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">Balance</p>
       <div className="flex flex-col gap-2.5 lg:gap-3">
         {CATEGORIES.map(k => {
           const pct = Math.round((counts[k] / total) * 100)
@@ -505,7 +541,7 @@ function BalanceBars({
                   style={{ width: `${pct}%`, opacity: 0.8 }}
                 />
               </div>
-              <span className="font-sans text-xs lg:text-sm text-white/25 w-10 text-right shrink-0">{pct}%</span>
+              <span className="font-sans text-xs lg:text-sm text-white/50 w-10 text-right shrink-0">{pct}%</span>
             </div>
           )
         })}
@@ -532,7 +568,7 @@ function LegendItem({ state, label }: { state: DayState; label: string }) {
       {state === 'missed' && (
         <div className="w-3 h-3 rounded-full shrink-0" style={{ border: '1px solid rgba(255,255,255,0.15)' }} />
       )}
-      <span className="font-sans text-xs lg:text-sm text-white/30">{label}</span>
+      <span className="font-sans text-xs lg:text-sm text-white/50">{label}</span>
     </div>
   )
 }

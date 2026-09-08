@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { logEvent } from '../lib/analytics'
 import type { AppData, CategoryKey, OnboardingData } from '../types'
 
 const STORAGE_KEY = 'three-wins-data'
@@ -95,6 +96,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   dataRef.current = data
   const sessionRef = useRef(session)
   sessionRef.current = session
+  const openedLoggedRef = useRef(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -106,6 +108,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     })
     return () => sub.subscription.unsubscribe()
   }, [])
+
+  // Once per session (not per render/navigation) — enough to compute daily-
+  // active-user counts and retention without needing a "last seen" column.
+  useEffect(() => {
+    if (session && !openedLoggedRef.current) {
+      openedLoggedRef.current = true
+      logEvent(session.user.id, 'app_opened')
+    }
+  }, [session])
 
   // Load remote data whenever a user signs in.
   useEffect(() => {
@@ -144,12 +155,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
           bank: seed.bank,
           checkins: seed.checkins,
         })
+        logEvent(session.user.id, 'signed_up')
       }
     })()
     return () => { cancelled = true }
   }, [session])
 
-  const update = useCallback((next: AppData) => {
+  // options.merge picks the server-side jsonb-merge RPC instead of a plain
+  // upsert — see merge_app_data in supabase/schema.sql for exactly what it
+  // does and doesn't protect against. Only logWin uses it; every other
+  // action keeps the plain overwrite since a merge can't represent deletion.
+  const lastUpdateOptsRef = useRef<{ merge?: boolean }>({})
+
+  const update = useCallback((next: AppData, options?: { merge?: boolean }) => {
+    lastUpdateOptsRef.current = options ?? {}
     saveLocal(next)
     setData(next)
     if (session) {
@@ -158,26 +177,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return
       }
       setSyncStatus('syncing')
-      supabase
-        .from('app_data')
-        .upsert({ user_id: session.user.id, onboarding: next.onboarding, days: next.days, bank: next.bank, checkins: next.checkins })
-        .then(({ error }) => {
-          if (error) {
-            console.error('Failed to sync app data', error)
-            setSyncStatus('error')
-          } else {
-            setSyncStatus('synced')
-          }
-        })
+      const request = options?.merge
+        ? supabase.rpc('merge_app_data', {
+            p_user_id: session.user.id,
+            p_onboarding: next.onboarding,
+            p_days: next.days,
+            p_bank: next.bank,
+            p_checkins: next.checkins,
+          })
+        : supabase
+            .from('app_data')
+            .upsert({ user_id: session.user.id, onboarding: next.onboarding, days: next.days, bank: next.bank, checkins: next.checkins })
+      request.then(({ error }) => {
+        if (error) {
+          console.error('Failed to sync app data', error)
+          setSyncStatus('error')
+        } else {
+          setSyncStatus('synced')
+        }
+      })
     }
   }, [session])
 
   // Retry the most recent local state against Supabase — used after a failed
-  // or offline sync. Re-running update() with the current data is safe/idempotent
-  // since it's the same upsert the last (unsynced) write already attempted.
+  // or offline sync. Re-running update() with the current data and the same
+  // merge/overwrite mode is safe/idempotent since it's the same write the
+  // last (unsynced) attempt already tried.
   const retrySync = useCallback(() => {
     if (!sessionRef.current) return
-    update(dataRef.current)
+    update(dataRef.current, lastUpdateOptsRef.current)
   }, [update])
 
   // If a write failed or happened while offline, retry automatically the
@@ -198,16 +226,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const logWin = useCallback((date: string, category: 'physical' | 'mental' | 'spiritual', text: string, reflection?: string) => {
     const current = dataRef.current
     const day = current.days[date] ?? { physical: null, mental: null, spiritual: null }
+    const wasComplete = CATEGORIES.every(k => day[k] !== null)
+    const nextDay = { ...day, [category]: { text, completedAt: new Date().toISOString(), reflection } }
+    const nowComplete = CATEGORIES.every(k => nextDay[k] !== null)
     // A date that previously exploded into dust (0 wins that day) can be
     // relogged later from History — clear its stale flag so Triova re-evaluates it.
     clearDateFlags(d => d === date)
+    // merge: true — this is the frequent, high-stakes write (a device could
+    // easily be syncing a stale local snapshot of unrelated days), so it goes
+    // through the server-side jsonb merge instead of a blind overwrite.
     update({
       ...current,
-      days: {
-        ...current.days,
-        [date]: { ...day, [category]: { text, completedAt: new Date().toISOString(), reflection } },
-      },
-    })
+      days: { ...current.days, [date]: nextDay },
+    }, { merge: true })
+    if (!wasComplete && nowComplete && sessionRef.current) {
+      logEvent(sessionRef.current.user.id, 'all_three_logged', { date })
+    }
   }, [update])
 
   const clearWin = useCallback((date: string, category: CategoryKey) => {

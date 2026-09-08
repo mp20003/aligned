@@ -18,11 +18,11 @@ export default function LegalPage({ title, updated, children }: { title: string;
         <div className="flex flex-col gap-1">
           <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Triova</p>
           <h1 className="font-serif text-2xl lg:text-4xl text-white">{title}</h1>
-          <p className="font-sans text-xs text-white/25 mt-1">Last updated {updated}</p>
+          <p className="font-sans text-xs text-white/50 mt-1">Last updated {updated}</p>
         </div>
         <button
           onClick={() => navigate(-1)}
-          className="font-sans text-xs lg:text-sm text-white/30 underline underline-offset-4 hover:text-white/55 transition-colors flex-shrink-0"
+          className="font-sans text-xs lg:text-sm text-white/50 underline underline-offset-4 hover:text-white/80 transition-colors flex-shrink-0"
         >
           Back
         </button>

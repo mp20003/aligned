@@ -31,7 +31,7 @@ export default function Login() {
 
         {/* Triova mark */}
         <div className="flex flex-col items-center gap-4">
-          <svg width="36" height="36" viewBox="0 0 22 22" fill="none" strokeLinecap="round">
+          <svg width="36" height="36" viewBox="0 0 22 22" fill="none" strokeLinecap="round" aria-hidden="true">
             <path d="M 11,2 A 9,9 0 0,1 18.79,15.5" stroke="#1D9E75" strokeWidth="2" />
             <path d="M 18.79,15.5 A 9,9 0 0,1 3.21,15.5" stroke="#7F77DD" strokeWidth="2" />
             <path d="M 3.21,15.5 A 9,9 0 0,1 11,2" stroke="#D85A30" strokeWidth="2" />
@@ -50,7 +50,7 @@ export default function Login() {
             className="w-full py-3.5 lg:py-4 rounded-2xl font-sans text-sm lg:text-base text-white/80 tracking-wide flex items-center justify-center gap-3 transition-all duration-150 btn-lift disabled:opacity-50"
             style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)' }}
           >
-            <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+            <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
               <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
               <path d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z" fill="#FBBC05"/>
@@ -58,14 +58,14 @@ export default function Login() {
             </svg>
             {loading ? 'Redirecting…' : 'Sign in with Google'}
           </button>
-          <p className="font-sans text-xs text-white/20 text-center leading-relaxed">
+          <p className="font-sans text-xs text-white/50 text-center leading-relaxed">
             Your data is private and only visible to you.
           </p>
-          <p className="font-sans text-xs text-white/20 text-center leading-relaxed">
+          <p className="font-sans text-xs text-white/50 text-center leading-relaxed">
             By continuing, you agree to our{' '}
-            <Link to="/terms" className="underline underline-offset-4 hover:text-white/40">Terms</Link>
+            <Link to="/terms" className="underline underline-offset-4 hover:text-white/80">Terms</Link>
             {' '}and{' '}
-            <Link to="/privacy" className="underline underline-offset-4 hover:text-white/40">Privacy Policy</Link>.
+            <Link to="/privacy" className="underline underline-offset-4 hover:text-white/80">Privacy Policy</Link>.
           </p>
         </div>
       </div>

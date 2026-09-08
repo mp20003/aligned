@@ -33,14 +33,14 @@ export default class ErrorBoundary extends Component<Props, State> {
         style={{ background: '#0f0f1a' }}
       >
         <div className="w-full max-w-sm flex flex-col items-center gap-6 text-center">
-          <svg width="32" height="32" viewBox="0 0 22 22" fill="none" strokeLinecap="round">
+          <svg width="32" height="32" viewBox="0 0 22 22" fill="none" strokeLinecap="round" aria-hidden="true">
             <path d="M 11,2 A 9,9 0 0,1 18.79,15.5" stroke="#1D9E75" strokeWidth="2" opacity="0.4" />
             <path d="M 18.79,15.5 A 9,9 0 0,1 3.21,15.5" stroke="#7F77DD" strokeWidth="2" opacity="0.4" />
             <path d="M 3.21,15.5 A 9,9 0 0,1 11,2" stroke="#D85A30" strokeWidth="2" opacity="0.4" />
           </svg>
           <div className="flex flex-col gap-2">
             <h1 className="font-serif text-2xl text-white">Something went wrong</h1>
-            <p className="font-sans text-sm text-white/40 leading-relaxed">
+            <p className="font-sans text-sm text-white/50 leading-relaxed">
               Triova hit a snag. Your last saved wins are safe — reloading should fix it.
             </p>
           </div>

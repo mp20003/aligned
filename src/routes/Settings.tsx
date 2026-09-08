@@ -130,7 +130,7 @@ export default function Settings() {
         </div>
         <button
           onClick={() => navigate(-1)}
-          className="font-sans text-xs lg:text-sm text-white/30 underline underline-offset-4 hover:text-white/55 transition-colors"
+          className="font-sans text-xs lg:text-sm text-white/50 underline underline-offset-4 hover:text-white/80 transition-colors"
         >
           Done
         </button>
@@ -138,7 +138,7 @@ export default function Settings() {
 
       {/* Name */}
       <section className="flex flex-col gap-3">
-        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Your name</p>
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">Your name</p>
         <input
           type="text"
           value={name}
@@ -150,7 +150,7 @@ export default function Settings() {
 
       {/* Categories */}
       <section className="flex flex-col gap-5 lg:gap-6">
-        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Your categories</p>
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">Your categories</p>
         {(['physical', 'mental', 'spiritual'] as CategoryKey[]).map(key => (
           <div key={key} className="flex flex-col gap-2">
             <input
@@ -183,8 +183,8 @@ export default function Settings() {
 
       {/* Data */}
       <section className="flex flex-col gap-3 pt-6" style={divider}>
-        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Your data</p>
-        <p className="font-sans text-xs lg:text-sm text-white/30 leading-relaxed">
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">Your data</p>
+        <p className="font-sans text-xs lg:text-sm text-white/50 leading-relaxed">
           {dayCount === 0
             ? 'No wins logged yet.'
             : `${dayCount} day${dayCount === 1 ? '' : 's'} logged. Export to keep a backup.`}
@@ -195,7 +195,7 @@ export default function Settings() {
               className="w-1.5 h-1.5 rounded-full flex-shrink-0"
               style={{ background: syncStatus === 'synced' ? '#1D9E75' : syncStatus === 'syncing' ? 'rgba(255,255,255,0.35)' : '#D85A30' }}
             />
-            <p className="font-sans text-xs lg:text-sm text-white/40">{SYNC_LABEL[syncStatus]}</p>
+            <p className="font-sans text-xs lg:text-sm text-white/50">{SYNC_LABEL[syncStatus]}</p>
             {(syncStatus === 'error' || syncStatus === 'offline') && (
               <button
                 onClick={retrySync}
@@ -227,8 +227,8 @@ export default function Settings() {
 
       {/* Clear a month */}
       <section className="flex flex-col gap-3 pt-6" style={divider}>
-        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Clear a month</p>
-        <p className="font-sans text-xs lg:text-sm text-white/30 leading-relaxed">
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">Clear a month</p>
+        <p className="font-sans text-xs lg:text-sm text-white/50 leading-relaxed">
           Remove every win logged in one month — useful for wiping out test data or a month you'd rather not keep.
         </p>
         <div className="flex gap-3">
@@ -258,7 +258,7 @@ export default function Settings() {
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmClearMonth(false)}
-                className="flex-1 py-2.5 lg:py-3 rounded-xl font-sans text-sm lg:text-base text-white/40"
+                className="flex-1 py-2.5 lg:py-3 rounded-xl font-sans text-sm lg:text-base text-white/50"
                 style={surfaceBtn}
               >
                 Cancel
@@ -276,11 +276,11 @@ export default function Settings() {
 
       {/* Reset */}
       <section className="flex flex-col gap-3 pt-6" style={divider}>
-        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Reset</p>
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">Reset</p>
         {!confirmReset ? (
           <button
             onClick={() => setConfirmReset(true)}
-            className="w-full py-3 lg:py-3.5 rounded-xl font-sans text-sm lg:text-base text-white/30 hover:text-white/50 transition-colors"
+            className="w-full py-3 lg:py-3.5 rounded-xl font-sans text-sm lg:text-base text-white/50 hover:text-white/80 transition-colors"
             style={surfaceBtn}
           >
             Reset practice
@@ -293,7 +293,7 @@ export default function Settings() {
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmReset(false)}
-                className="flex-1 py-2.5 lg:py-3 rounded-xl font-sans text-sm lg:text-base text-white/40"
+                className="flex-1 py-2.5 lg:py-3 rounded-xl font-sans text-sm lg:text-base text-white/50"
                 style={surfaceBtn}
               >
                 Cancel
@@ -311,11 +311,11 @@ export default function Settings() {
 
       {/* Delete account */}
       <section className="flex flex-col gap-3 pt-6" style={divider}>
-        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Delete account</p>
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">Delete account</p>
         {!confirmDelete ? (
           <button
             onClick={() => setConfirmDelete(true)}
-            className="w-full py-3 lg:py-3.5 rounded-xl font-sans text-sm lg:text-base text-white/30 hover:text-white/50 transition-colors"
+            className="w-full py-3 lg:py-3.5 rounded-xl font-sans text-sm lg:text-base text-white/50 hover:text-white/80 transition-colors"
             style={surfaceBtn}
           >
             Delete my account
@@ -333,7 +333,7 @@ export default function Settings() {
               <button
                 onClick={() => { setConfirmDelete(false); setDeleteError('') }}
                 disabled={deleting}
-                className="flex-1 py-2.5 lg:py-3 rounded-xl font-sans text-sm lg:text-base text-white/40 disabled:opacity-50"
+                className="flex-1 py-2.5 lg:py-3 rounded-xl font-sans text-sm lg:text-base text-white/50 disabled:opacity-50"
                 style={surfaceBtn}
               >
                 Cancel
@@ -354,7 +354,7 @@ export default function Settings() {
       <section className="flex flex-col gap-3 pt-6" style={divider}>
         <button
           onClick={signOut}
-          className="w-full py-3 lg:py-3.5 rounded-xl font-sans text-sm lg:text-base text-white/30 hover:text-white/50 transition-colors"
+          className="w-full py-3 lg:py-3.5 rounded-xl font-sans text-sm lg:text-base text-white/50 hover:text-white/80 transition-colors"
           style={surfaceBtn}
         >
           Sign out
@@ -363,10 +363,10 @@ export default function Settings() {
 
       {/* Legal */}
       <section className="flex items-center justify-center gap-4 pt-2">
-        <Link to="/privacy" className="font-sans text-xs text-white/20 underline underline-offset-4 hover:text-white/40 transition-colors">
+        <Link to="/privacy" className="font-sans text-xs text-white/50 underline underline-offset-4 hover:text-white/80 transition-colors">
           Privacy Policy
         </Link>
-        <Link to="/terms" className="font-sans text-xs text-white/20 underline underline-offset-4 hover:text-white/40 transition-colors">
+        <Link to="/terms" className="font-sans text-xs text-white/50 underline underline-offset-4 hover:text-white/80 transition-colors">
           Terms of Service
         </Link>
       </section>

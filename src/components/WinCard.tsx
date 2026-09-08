@@ -38,10 +38,12 @@ function CategoryLabel({ label, definition, accentText }: { label: string; defin
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        aria-label={`${label} — show what this category means to you`}
         className={`flex items-center gap-1.5 font-sans text-xs lg:text-sm uppercase tracking-widest ${accentText}`}
       >
         {label}
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-50 shrink-0">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-50 shrink-0" aria-hidden="true">
           <circle cx="12" cy="12" r="10" />
           <path d="M12 16v-4.5M12 8h.01" strokeLinecap="round" />
         </svg>
@@ -55,7 +57,7 @@ function CategoryLabel({ label, definition, accentText }: { label: string; defin
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="self-start font-sans text-xs text-white/30 underline underline-offset-2 hover:text-white/55 transition-colors"
+            className="self-start font-sans text-xs text-white/50 underline underline-offset-2 hover:text-white/80 transition-colors"
           >
             Close
           </button>
@@ -114,12 +116,12 @@ export default function WinCard({
   if (skipped && !existing) {
     return (
       <div className="surface rounded-2xl px-5 lg:px-6 py-4 lg:py-5 flex items-center justify-between transition-all duration-200">
-        <CategoryLabel label={label} definition={definition} accentText={`${accent.text} opacity-50`} />
+        <CategoryLabel label={label} definition={definition} accentText={accent.text} />
         <div className="flex items-center gap-3">
-          <span className="font-serif text-sm lg:text-base text-white/25 italic">No win today</span>
+          <span className="font-serif text-sm lg:text-base text-white/50 italic">No win today</span>
           <button
             onClick={() => setSkipped(false)}
-            className="font-sans text-xs lg:text-sm text-white/30 underline underline-offset-2 hover:text-white/50 transition-colors"
+            className="font-sans text-xs lg:text-sm text-white/50 underline underline-offset-2 hover:text-white/80 transition-colors"
           >
             Add one
           </button>
@@ -136,14 +138,14 @@ export default function WinCard({
           <CategoryLabel label={label} definition={definition} accentText={accent.text} />
           <button
             onClick={() => { setValue(existing.text); setEditing(true); setReflecting(false) }}
-            className="font-sans text-xs lg:text-sm text-white/25 underline underline-offset-2 hover:text-white/50 transition-colors"
+            className="font-sans text-xs lg:text-sm text-white/50 underline underline-offset-2 hover:text-white/80 transition-colors"
           >
             Edit
           </button>
         </div>
         <p className="font-serif text-base lg:text-lg text-white/90 leading-snug">{existing.text}</p>
         {existing.reflection && (
-          <p className="font-sans text-xs lg:text-sm text-white/25 mt-0.5">{existing.reflection}</p>
+          <p className="font-sans text-xs lg:text-sm text-white/50 mt-0.5">{existing.reflection}</p>
         )}
       </div>
     )
@@ -155,7 +157,7 @@ export default function WinCard({
         <CategoryLabel label={label} definition={definition} accentText={accent.text} />
         <p className="font-serif text-sm lg:text-base text-white/50 leading-snug">"{value}"</p>
         <div className="flex flex-col gap-2">
-          <p className="font-sans text-xs lg:text-sm text-white/25 uppercase tracking-widest">How did it feel?</p>
+          <p className="font-sans text-xs lg:text-sm text-white/50 uppercase tracking-widest">How did it feel?</p>
           <div className="grid grid-cols-2 gap-2">
             {REFLECTION_WORDS.map(word => (
               <button
@@ -180,7 +182,7 @@ export default function WinCard({
       {/* Example */}
       {dailySuggestions.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <p className="font-sans text-xs lg:text-sm text-white/20 uppercase tracking-widest">Example</p>
+          <p className="font-sans text-xs lg:text-sm text-white/50 uppercase tracking-widest">Example</p>
           <div className="flex flex-wrap gap-2">
             {dailySuggestions.map(s => (
               <button
@@ -203,7 +205,7 @@ export default function WinCard({
       {/* Your bank — wins the user has explicitly saved for reuse */}
       {bank.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <p className="font-sans text-xs lg:text-sm text-white/20 uppercase tracking-widest">Your bank</p>
+          <p className="font-sans text-xs lg:text-sm text-white/50 uppercase tracking-widest">Your bank</p>
           <div className="flex flex-wrap gap-2">
             {bank.map(w => (
               <span
@@ -215,7 +217,7 @@ export default function WinCard({
                   type="button"
                   onClick={() => setValue(w)}
                   className={`pl-3 pr-1.5 py-1.5 font-sans text-xs lg:text-sm rounded-l-full chip-press ${
-                    value === w ? 'text-white' : 'text-white/40 hover:text-white/70'
+                    value === w ? 'text-white' : 'text-white/50 hover:text-white/80'
                   }`}
                 >
                   {w}
@@ -225,7 +227,7 @@ export default function WinCard({
                   onClick={() => onRemoveFromBank(w)}
                   aria-label={`Remove "${w}" from bank`}
                   className={`pr-3 pl-1 py-1.5 rounded-r-full font-sans text-xs lg:text-sm ${
-                    value === w ? 'text-white/70 hover:text-white' : 'text-white/25 hover:text-white/60'
+                    value === w ? 'text-white/70 hover:text-white' : 'text-white/50 hover:text-white/80'
                   }`}
                 >
                   ×
@@ -243,13 +245,15 @@ export default function WinCard({
           <button
             type="button"
             onClick={() => setPreviouslyOpen(v => !v)}
-            className="flex items-center gap-1.5 font-sans text-xs lg:text-sm text-white/20 uppercase tracking-widest hover:text-white/40 transition-colors"
+            aria-expanded={previouslyOpen}
+            className="flex items-center gap-1.5 font-sans text-xs lg:text-sm text-white/50 uppercase tracking-widest hover:text-white/80 transition-colors"
           >
             <span>Previously ({pastWins.length})</span>
             <svg
               width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
               strokeLinecap="round" strokeLinejoin="round"
               className={`shrink-0 transition-transform duration-150 ${previouslyOpen ? 'rotate-180' : ''}`}
+              aria-hidden="true"
             >
               <path d="M6 9l6 6 6-6" />
             </svg>
@@ -263,7 +267,7 @@ export default function WinCard({
                   className={`px-3 py-1.5 rounded-full font-sans text-xs lg:text-sm transition-all duration-150 chip-press ${
                     value === w
                       ? `${accent.bg} text-white border-transparent shadow-sm`
-                      : 'text-white/40 hover:text-white/70'
+                      : 'text-white/50 hover:text-white/80'
                   }`}
                   style={value === w ? {} : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
                 >
@@ -296,7 +300,7 @@ export default function WinCard({
         {(editing || !trimmedValue) && (
           <button
             onClick={handleNoWinToday}
-            className="font-sans text-xs lg:text-sm text-white/25 underline underline-offset-2 hover:text-white/45 transition-colors"
+            className="font-sans text-xs lg:text-sm text-white/50 underline underline-offset-2 hover:text-white/80 transition-colors"
           >
             No win today
           </button>
@@ -304,7 +308,7 @@ export default function WinCard({
         {trimmedValue && !bank.includes(trimmedValue) && (
           <button
             onClick={() => onSaveToBank(trimmedValue)}
-            className="font-sans text-xs lg:text-sm text-white/30 underline underline-offset-2 hover:text-white/55 transition-colors"
+            className="font-sans text-xs lg:text-sm text-white/50 underline underline-offset-2 hover:text-white/80 transition-colors"
           >
             Save to bank
           </button>

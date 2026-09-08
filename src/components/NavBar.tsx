@@ -68,10 +68,10 @@ export default function NavBar() {
               key={to}
               to={to}
               className={`flex flex-col items-center gap-1 lg:gap-1.5 transition-all duration-150 hover:scale-110 active:scale-95 ${
-                active ? 'text-white' : 'text-white/25 hover:text-white/55'
+                active ? 'text-white' : 'text-white/50 hover:text-white/80'
               }`}
             >
-              <span className="lg:scale-125">{icon(active)}</span>
+              <span className="lg:scale-125" aria-hidden="true">{icon(active)}</span>
               <span className="font-sans text-xs lg:text-sm">{label}</span>
             </NavLink>
           )
