@@ -11,7 +11,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useApp } from '../context/AppContext'
-import { dateKey } from '../lib/date'
+import { dateKey, mondayOf } from '../lib/date'
 import type { CategoryKey } from '../types'
 
 const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
@@ -35,13 +35,6 @@ function isFuture(d: Date): boolean {
 }
 
 
-function getMondayOfWeek(d: Date): Date {
-  const day = new Date(d)
-  const dow = (day.getDay() + 6) % 7
-  day.setDate(day.getDate() - dow)
-  day.setHours(0, 0, 0, 0)
-  return day
-}
 
 function getCurrentWeek(): Date[] {
   const today = new Date()
@@ -57,8 +50,8 @@ function getAllWeeks(days: Record<string, unknown>): Date[][] {
   const keys = Object.keys(days).sort()
   if (keys.length === 0) return [getCurrentWeek()]
   const firstDate = new Date(keys[0] + 'T12:00:00')
-  const firstMonday = getMondayOfWeek(firstDate)
-  const currentMonday = getMondayOfWeek(new Date())
+  const firstMonday = mondayOf(firstDate)
+  const currentMonday = mondayOf(new Date())
   const weeks: Date[][] = []
   const cursor = new Date(firstMonday)
   while (cursor <= currentMonday) {

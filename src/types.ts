@@ -25,8 +25,14 @@ export type OnboardingData = {
 
 export type WinBank = Record<CategoryKey, string[]>
 
+// Weekly reflective check-in ("which felt hardest to show up for this
+// week?"), keyed by that week's Monday date ("YYYY-MM-DD", see lib/date's
+// mondayOf) so it lines up with how the app identifies weeks everywhere else.
+export type WeeklyCheckins = Record<string, CategoryKey>
+
 export type AppData = {
   onboarding: OnboardingData
   days: Record<string, DayEntry> // key: "YYYY-MM-DD"
   bank: WinBank // user-saved reusable wins per category
+  checkins: WeeklyCheckins
 }

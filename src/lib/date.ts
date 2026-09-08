@@ -10,3 +10,14 @@ export function dateKey(d: Date): string {
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
 }
+
+// Monday of the week containing d, at local midnight. Shared so every place
+// that identifies a "week" (Score's constellation clusters, Today's weekly
+// check-in) agrees on the same boundary.
+export function mondayOf(d: Date): Date {
+  const day = new Date(d)
+  const dow = (day.getDay() + 6) % 7
+  day.setDate(day.getDate() - dow)
+  day.setHours(0, 0, 0, 0)
+  return day
+}

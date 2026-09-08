@@ -18,6 +18,7 @@ const defaultData: AppData = {
   },
   days: {},
   bank: { physical: [], mental: [], spiritual: [] },
+  checkins: {},
 }
 
 function loadLocal(): AppData {
@@ -80,6 +81,7 @@ type AppContextValue = {
   deleteAccount: () => Promise<{ ok: true } | { ok: false; error: string }>
   addToBank: (category: CategoryKey, text: string) => void
   removeFromBank: (category: CategoryKey, text: string) => void
+  recordWeeklyCheckin: (weekKey: string, category: CategoryKey) => void
 }
 
 const AppContext = createContext<AppContextValue | null>(null)
@@ -112,7 +114,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ;(async () => {
       const { data: row, error } = await supabase
         .from('app_data')
-        .select('onboarding, days, bank')
+        .select('onboarding, days, bank, checkins')
         .eq('user_id', session.user.id)
         .maybeSingle()
 
@@ -128,6 +130,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           onboarding: row.onboarding,
           days: row.days,
           bank: row.bank ?? defaultData.bank,
+          checkins: row.checkins ?? defaultData.checkins,
         }
         setData(merged)
         saveLocal(merged)
@@ -139,6 +142,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           onboarding: seed.onboarding,
           days: seed.days,
           bank: seed.bank,
+          checkins: seed.checkins,
         })
       }
     })()
@@ -156,7 +160,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSyncStatus('syncing')
       supabase
         .from('app_data')
-        .upsert({ user_id: session.user.id, onboarding: next.onboarding, days: next.days, bank: next.bank })
+        .upsert({ user_id: session.user.id, onboarding: next.onboarding, days: next.days, bank: next.bank, checkins: next.checkins })
         .then(({ error }) => {
           if (error) {
             console.error('Failed to sync app data', error)
@@ -249,7 +253,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(DUST_KEY)
     localStorage.removeItem(BORN_KEY)
     localStorage.removeItem(MISSED_PROMPT_KEY)
-    update({ ...dataRef.current, days: {} })
+    update({ ...dataRef.current, days: {}, checkins: {} })
   }, [update])
 
   const restoreData = useCallback((imported: AppData) => {
@@ -259,7 +263,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(DUST_KEY)
     localStorage.removeItem(BORN_KEY)
     localStorage.removeItem(MISSED_PROMPT_KEY)
-    update({ ...imported, bank: imported.bank ?? defaultData.bank })
+    update({ ...imported, bank: imported.bank ?? defaultData.bank, checkins: imported.checkins ?? defaultData.checkins })
+  }, [update])
+
+  // Records the answer to the weekly "which felt hardest?" check-in, keyed
+  // by that week's Monday so it's stable regardless of which day it's
+  // actually answered on and lines up with how Score identifies weeks.
+  const recordWeeklyCheckin = useCallback((weekKey: string, category: CategoryKey) => {
+    const current = dataRef.current
+    update({ ...current, checkins: { ...current.checkins, [weekKey]: category } })
   }, [update])
 
   const addToBank = useCallback((category: CategoryKey, text: string) => {
@@ -310,7 +322,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [signOut])
 
   return (
-    <AppContext.Provider value={{ data, session, authLoading, syncStatus, retrySync, completeOnboarding, logWin, clearWin, clearDay, clearRange, updateSettings, resetPractice, restoreData, signOut, deleteAccount, addToBank, removeFromBank }}>
+    <AppContext.Provider value={{ data, session, authLoading, syncStatus, retrySync, completeOnboarding, logWin, clearWin, clearDay, clearRange, updateSettings, resetPractice, restoreData, signOut, deleteAccount, addToBank, removeFromBank, recordWeeklyCheckin }}>
       {children}
     </AppContext.Provider>
   )

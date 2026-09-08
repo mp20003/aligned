@@ -3,11 +3,16 @@ create table app_data (
   onboarding jsonb not null default '{}'::jsonb,
   days jsonb not null default '{}'::jsonb,
   bank jsonb not null default '{"physical":[],"mental":[],"spiritual":[]}'::jsonb,
+  checkins jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
 
 -- Migration for existing databases created before the "bank" column existed:
 -- alter table app_data add column if not exists bank jsonb not null default '{"physical":[],"mental":[],"spiritual":[]}'::jsonb;
+
+-- Migration for existing databases created before the "checkins" column existed
+-- (weekly "which felt hardest?" reflection, keyed by that week's Monday date):
+-- alter table app_data add column if not exists checkins jsonb not null default '{}'::jsonb;
 
 alter table app_data enable row level security;
 

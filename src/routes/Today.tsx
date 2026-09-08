@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router'
 import { useApp } from '../context/AppContext'
 import { getDailySuggestions, getPastWins } from '../data/suggestions'
 import WinCard, { ACCENT } from '../components/WinCard'
-import { dateKey } from '../lib/date'
+import { dateKey, mondayOf } from '../lib/date'
 import type { CategoryKey, WinEntry } from '../types'
 
 // Same key AppContext clears on resetPractice/restoreData/signOut and on any
@@ -31,6 +31,21 @@ function markMissedPrompted(dateStr: string) {
   const set = getMissedPromptSet()
   set.add(dateStr)
   localStorage.setItem(MISSED_PROMPT_KEY, JSON.stringify([...set]))
+}
+
+// Skipping the weekly check-in is a lightweight, device-local "not now" —
+// unlike the answer itself, it's not worth syncing across devices.
+const WEEKLY_SKIP_KEY = 'triova-weekly-skipped'
+
+function getWeeklySkipSet(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(WEEKLY_SKIP_KEY) ?? '[]')) }
+  catch { return new Set() }
+}
+
+function markWeeklySkipped(weekKey: string) {
+  const set = getWeeklySkipSet()
+  set.add(weekKey)
+  localStorage.setItem(WEEKLY_SKIP_KEY, JSON.stringify([...set]))
 }
 
 function todayKey() {
@@ -93,7 +108,7 @@ function formatDateLabel(dateStr: string): string {
 }
 
 export default function Today() {
-  const { data, logWin, clearWin, addToBank, removeFromBank } = useApp()
+  const { data, logWin, clearWin, addToBank, removeFromBank, recordWeeklyCheckin } = useApp()
   const navigate = useNavigate()
 
   const date = todayKey()
@@ -104,8 +119,15 @@ export default function Today() {
   const allDone = entry.physical !== null && entry.mental !== null && entry.spiritual !== null
 
   const isSunday = new Date().getDay() === 0
-  const sundayCheckinKey = `triova-sunday-${date}`
-  const [sundayDone, setSundayDone] = useState(() => !!localStorage.getItem(sundayCheckinKey))
+  const thisMonday = mondayOf(new Date())
+  const weekKey = dateKey(thisMonday)
+  const prevMonday = new Date(thisMonday)
+  prevMonday.setDate(prevMonday.getDate() - 7)
+  const lastWeekAnswer = data.checkins[dateKey(prevMonday)]
+  const checkinAnswered = weekKey in data.checkins
+  const [weeklySkipped, setWeeklySkipped] = useState(() => getWeeklySkipSet().has(weekKey))
+  const [justAnswered, setJustAnswered] = useState<CategoryKey | null>(null)
+  const showWeeklyCheckin = isSunday && !weeklySkipped && (justAnswered !== null || !checkinAnswered)
   const [aligned, setAligned] = useState(allDone)
   const [fading, setFading] = useState(false)
 
@@ -144,9 +166,15 @@ export default function Today() {
     }
   }
 
-  function handleSundayCheckin(key: CategoryKey) {
-    localStorage.setItem(sundayCheckinKey, key)
-    setSundayDone(true)
+  function handleWeeklyCheckin(key: CategoryKey) {
+    recordWeeklyCheckin(weekKey, key)
+    setJustAnswered(key)
+    setTimeout(() => setJustAnswered(null), 2600)
+  }
+
+  function handleSkipWeeklyCheckin() {
+    markWeeklySkipped(weekKey)
+    setWeeklySkipped(true)
   }
 
   const missedModal = missedPrompt && missedPromptOpen && (
@@ -197,25 +225,46 @@ export default function Today() {
         </div>
       )}
 
-      {/* Sunday check-in */}
-      {isSunday && !sundayDone && (
+      {/* Weekly check-in — an offer, not an obligation: dismissible, and it
+          remembers what you told it last time instead of asking into a void. */}
+      {showWeeklyCheckin && (
         <div className="surface rounded-2xl px-5 lg:px-6 py-4 lg:py-5 flex flex-col gap-3">
-          <div className="flex flex-col gap-0.5">
-            <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">This week</p>
-            <p className="font-serif text-sm lg:text-base text-white/60">Which part of you felt hardest to show up for?</p>
-          </div>
-          <div className="flex gap-2">
-            {(['physical', 'mental', 'spiritual'] as CategoryKey[]).map(key => (
+          {justAnswered ? (
+            <div className="flex flex-col gap-0.5">
+              <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">This week</p>
+              <p className="font-serif text-sm lg:text-base text-white/60">Noted — thank you for the honesty.</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-col gap-0.5">
+                <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">This week</p>
+                <p className="font-serif text-sm lg:text-base text-white/60">Which part of you felt hardest to show up for?</p>
+                {lastWeekAnswer && (
+                  <p className="font-sans text-xs text-white/25 mt-1">
+                    Last week, you said {categories[lastWeekAnswer].label.toLowerCase()}.
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                {(['physical', 'mental', 'spiritual'] as CategoryKey[]).map(key => (
+                  <button
+                    key={key}
+                    onClick={() => handleWeeklyCheckin(key)}
+                    className="flex-1 py-2 lg:py-2.5 rounded-xl font-sans text-xs lg:text-sm text-white/50 hover:text-white/80 transition-all duration-150 btn-lift"
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  >
+                    {categories[key].label}
+                  </button>
+                ))}
+              </div>
               <button
-                key={key}
-                onClick={() => handleSundayCheckin(key)}
-                className="flex-1 py-2 lg:py-2.5 rounded-xl font-sans text-xs lg:text-sm text-white/50 hover:text-white/80 transition-all duration-150 btn-lift"
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+                onClick={handleSkipWeeklyCheckin}
+                className="font-sans text-xs text-white/25 hover:text-white/45 transition-colors self-start"
               >
-                {categories[key].label}
+                Skip this week
               </button>
-            ))}
-          </div>
+            </>
+          )}
         </div>
       )}
 
