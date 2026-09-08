@@ -48,7 +48,7 @@ const LINKS = [
 
 export default function NavBar() {
   const { pathname } = useLocation()
-  if (pathname === '/onboarding' || pathname === '/settings') return null
+  if (pathname === '/onboarding' || pathname === '/settings' || pathname === '/privacy' || pathname === '/terms') return null
 
   return (
     <nav

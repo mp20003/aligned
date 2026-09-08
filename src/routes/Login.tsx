@@ -5,6 +5,7 @@
  */
 
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { supabase } from '../lib/supabase'
 
 export default function Login() {
@@ -59,6 +60,12 @@ export default function Login() {
           </button>
           <p className="font-sans text-xs text-white/20 text-center leading-relaxed">
             Your data is private and only visible to you.
+          </p>
+          <p className="font-sans text-xs text-white/20 text-center leading-relaxed">
+            By continuing, you agree to our{' '}
+            <Link to="/terms" className="underline underline-offset-4 hover:text-white/40">Terms</Link>
+            {' '}and{' '}
+            <Link to="/privacy" className="underline underline-offset-4 hover:text-white/40">Privacy Policy</Link>.
           </p>
         </div>
       </div>

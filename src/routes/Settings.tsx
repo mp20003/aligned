@@ -6,7 +6,7 @@
  */
 
 import { useState, useRef } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, Link } from 'react-router'
 import { useApp } from '../context/AppContext'
 import { dateKey } from '../lib/date'
 import type { CategoryKey, AppData } from '../types'
@@ -28,8 +28,15 @@ function monthLabel(monthStr: string): string {
   return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 }
 
+const SYNC_LABEL: Record<string, string> = {
+  synced: 'Synced to your account',
+  syncing: 'Syncing…',
+  offline: "You're offline — changes are saved on this device",
+  error: "Couldn't sync — changes are saved on this device",
+}
+
 export default function Settings() {
-  const { data, updateSettings, resetPractice, clearRange, restoreData, signOut } = useApp()
+  const { data, session, syncStatus, retrySync, updateSettings, resetPractice, clearRange, restoreData, signOut, deleteAccount } = useApp()
   const navigate = useNavigate()
 
   const [name, setName] = useState(data.onboarding.name)
@@ -38,6 +45,9 @@ export default function Settings() {
   const [confirmReset, setConfirmReset] = useState(false)
   const [clearMonth, setClearMonth] = useState('')
   const [confirmClearMonth, setConfirmClearMonth] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const importRef = useRef<HTMLInputElement>(null)
 
   function updateCategory(key: CategoryKey, field: 'label' | 'definition', value: string) {
@@ -91,6 +101,18 @@ export default function Settings() {
     clearRange(start, end)
     setConfirmClearMonth(false)
     setClearMonth('')
+  }
+
+  async function handleDeleteAccount() {
+    setDeleting(true)
+    setDeleteError('')
+    const result = await deleteAccount()
+    if (result.ok) {
+      navigate('/')
+    } else {
+      setDeleteError(result.error)
+      setDeleting(false)
+    }
   }
 
   const dayCount = Object.keys(data.days).length
@@ -167,6 +189,23 @@ export default function Settings() {
             ? 'No wins logged yet.'
             : `${dayCount} day${dayCount === 1 ? '' : 's'} logged. Export to keep a backup.`}
         </p>
+        {session && (
+          <div className="flex items-center gap-2">
+            <span
+              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+              style={{ background: syncStatus === 'synced' ? '#1D9E75' : syncStatus === 'syncing' ? 'rgba(255,255,255,0.35)' : '#D85A30' }}
+            />
+            <p className="font-sans text-xs lg:text-sm text-white/40">{SYNC_LABEL[syncStatus]}</p>
+            {(syncStatus === 'error' || syncStatus === 'offline') && (
+              <button
+                onClick={retrySync}
+                className="font-sans text-xs lg:text-sm text-white/50 underline underline-offset-4 hover:text-white/80 transition-colors"
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        )}
         <div className="flex gap-3">
           <button
             onClick={handleExport}
@@ -270,6 +309,47 @@ export default function Settings() {
         )}
       </section>
 
+      {/* Delete account */}
+      <section className="flex flex-col gap-3 pt-6" style={divider}>
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/30">Delete account</p>
+        {!confirmDelete ? (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="w-full py-3 lg:py-3.5 rounded-xl font-sans text-sm lg:text-base text-white/30 hover:text-white/50 transition-colors"
+            style={surfaceBtn}
+          >
+            Delete my account
+          </button>
+        ) : (
+          <div className="flex flex-col gap-3 rounded-2xl px-4 py-4" style={surfaceBtn}>
+            <p className="font-serif text-sm lg:text-base text-white/55 leading-relaxed">
+              This permanently deletes your account and everything you've logged. There's no undo —
+              export a backup first if you want to keep it.
+            </p>
+            {deleteError && (
+              <p className="font-sans text-xs lg:text-sm text-spiritual">{deleteError}</p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setConfirmDelete(false); setDeleteError('') }}
+                disabled={deleting}
+                className="flex-1 py-2.5 lg:py-3 rounded-xl font-sans text-sm lg:text-base text-white/40 disabled:opacity-50"
+                style={surfaceBtn}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                className="flex-1 py-2.5 lg:py-3 rounded-xl bg-spiritual text-white font-sans text-sm lg:text-base disabled:opacity-60"
+              >
+                {deleting ? 'Deleting…' : 'Yes, delete everything'}
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* Sign out */}
       <section className="flex flex-col gap-3 pt-6" style={divider}>
         <button
@@ -279,6 +359,16 @@ export default function Settings() {
         >
           Sign out
         </button>
+      </section>
+
+      {/* Legal */}
+      <section className="flex items-center justify-center gap-4 pt-2">
+        <Link to="/privacy" className="font-sans text-xs text-white/20 underline underline-offset-4 hover:text-white/40 transition-colors">
+          Privacy Policy
+        </Link>
+        <Link to="/terms" className="font-sans text-xs text-white/20 underline underline-offset-4 hover:text-white/40 transition-colors">
+          Terms of Service
+        </Link>
       </section>
 
     </div>

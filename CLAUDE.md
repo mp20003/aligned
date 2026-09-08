@@ -2,7 +2,23 @@
 
 ---
 
-## Current Build State (handoff note — updated 2026-09-04)
+## Current Build State (handoff note — updated 2026-09-08)
+
+### Launch-readiness pass (this session)
+Working toward a public web launch (app-store packaging and monetization are explicitly deferred to a later phase; free at launch). Tier-1 blockers identified in a codebase audit, addressed this session:
+- **Error boundary** (`src/components/ErrorBoundary.tsx`) — wraps the whole app in `App.tsx`. A render crash now shows a "Reload Triova" screen instead of a blank white page.
+- **Security headers** (`vercel.json`) — added CSP, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`. CSP required moving the service-worker registration script out of the inline `<script>` in `index.html` and into `src/main.tsx`, so `script-src` can stay `'self'` with no `unsafe-inline`. `style-src` does need `'unsafe-inline'` since the app uses React inline `style={{...}}` extensively.
+- **Sync status is now visible** (`AppContext`'s new `syncStatus`/`retrySync`) — a failed or offline Supabase upsert used to only `console.error` silently. Now tracked as `'synced' | 'syncing' | 'error' | 'offline'`, shown in Settings under "Your data" with a Retry button, and auto-retried when the browser's `online` event fires.
+- **Privacy Policy + Terms of Service** (`src/routes/Privacy.tsx`, `src/routes/Terms.tsx`, shared shell in `src/components/LegalPage.tsx`) — reachable at `/privacy` and `/terms` **without a session**, since `AppRoutes` in `App.tsx` had to be restructured (those two routes are now checked before the `!session → <Login/>` branch, not after). Linked from Login's footer and Settings' footer. Contact email and the governing-law clause are placeholder-reasonable, not lawyer-reviewed — revisit before real scale.
+- **Account deletion** — this was more than a missing button: `supabase/schema.sql` had no `delete` RLS policy at all, and the anon key can never delete an `auth.users` row regardless (needs the service-role key, which must never reach client code). Solved with:
+  - A `delete` RLS policy added to `supabase/schema.sql` (**must be run manually against the live project** — Supabase SQL Editor — since there's no CLI/migration tooling set up; nothing in this repo can execute it automatically).
+  - `api/delete-account.js` — a Vercel serverless function (plain `.js`, no new dependency — reuses `@supabase/supabase-js` already in `package.json`; works because `package.json` has `"type": "module"`). Verifies the caller's own access token server-side via the service-role client, then calls `auth.admin.deleteUser`, which cascades to delete the `app_data` row via the existing FK. Chosen over a Supabase Edge Function specifically to avoid introducing Supabase CLI tooling that doesn't exist in this project yet — the app already deploys to Vercel on every push, so this is one more file, not a new pipeline.
+  - **Still needs a human step before this works in production**: add `SUPABASE_SERVICE_ROLE_KEY` (from Supabase dashboard → Project Settings → API) as a Vercel project environment variable. It is not in `.env` and must never be — that file only holds the public anon key. `VITE_SUPABASE_URL` is reused server-side as-is since Vercel exposes all configured env vars to serverless functions regardless of the `VITE_` prefix.
+  - Client side: `AppContext`'s new `deleteAccount()` POSTs to `/api/delete-account` with the session's access token, then runs the same local cleanup as `signOut`. UI is in Settings, same two-step-confirm pattern as Reset/Clear-a-month.
+  - **Not testable against the local Vite dev server** — `/api` functions are a Vercel-only runtime; there is no local emulation set up (would need `vercel dev`, not currently used). Only verified via `npm run build` (typecheck) — the actual delete-user call needs a real deploy plus the env var above to test end-to-end.
+
+Remaining tier-1/tier-2 items from that audit (accessibility contrast pass, multi-device write conflicts, no error monitoring, no CI, no tests, History's share-card colors) are still open — see "Known safety/compliance gaps" below, which has been updated to match.
+
 
 ### App name & domain
 **Triova** (renamed from "Aligned"/"Three Wins"). GitHub repo: `https://github.com/mp20003/aligned` (repo name predates the rename, left as-is). Deployed on Vercel, auto-deploys on push to `main`. Live at **triova.app** (bought directly through Vercel, not Cloudflare — DNS auto-configured, no manual records needed).
@@ -89,8 +105,15 @@ The old intro framed Triova as an "AI presence" watching the user ("It watches y
 ### Vision document — produced this session, not app code
 A persuasion-style vision/pitch document (for onboarding collaborators, not users) was written and delivered as an editable **Word doc** (`docx` skill, not an Artifact — user asked for something they could edit directly). Covers the problem framing, the product's actual hard constraints (no streaks/scores/partial credit, listed as enforced code behaviour not aspirational values), the Tri/Nova name story, and explicitly cites James Clear's identity-based-habits framing and the 1%-compounding rule as the behavioural grounding — the opposite choice from the in-app onboarding copy above, and intentionally so (pitch doc for adults recruiting collaborators vs. product copy for end users). Not stored in the repo — was a one-off deliverable sent directly to the user. If asked to update it, there's no source file to edit; treat it as a fresh regeneration from the latest chat-approved draft, or ask the user to paste back the version they want edited.
 
-### Known safety/compliance gaps — flagged, not yet addressed
-No Privacy Policy or Terms of Service. No account/data-deletion flow (`signOut` clears the local session only; the Supabase `app_data` row is never deleted, so there's currently no way for a user to actually exercise a GDPR/CCPA-style erasure request from the app itself). No accessibility/contrast audit — a lot of the UI uses low-opacity white text (`white/25`, `white/30`) on a near-black background, some of which likely fails WCAG AA contrast. No data export/portability feature beyond the History share-card PNG (that's an image, not a data export). No cookie/consent disclosure (arguably low-risk since there's no third-party tracking, but nothing states that anywhere). No custom security headers beyond Vercel's defaults. None of this matters while the app has one user; all of it matters the moment it has real other users, especially EU/UK/California ones, or gets submitted to an app store.
+### Known safety/compliance gaps
+Addressed this session (see "Launch-readiness pass" above for detail): Privacy Policy + ToS now exist (`/privacy`, `/terms`); account/data deletion now works end-to-end (pending the manual RLS-policy + Vercel env var steps noted above); custom security headers added in `vercel.json`. Data export already existed (Settings → Export backup, JSON) and wasn't actually a gap — the old note here was wrong to lump it in with the PNG share-card.
+
+Still open, not yet addressed:
+- **No accessibility/contrast audit** — a lot of the UI uses low-opacity white text (`white/25`, `white/30`) on a near-black background, some of which likely fails WCAG AA contrast. Icon-only tap targets (the WinCard (i) info icon, star taps on the Triova screen) likely have no `aria-label`s either.
+- **Multi-device write conflicts** — `AppContext`'s `update()` is a plain last-write-wins `upsert`, no version/conflict check. Two devices editing the same day within seconds of each other can silently drop one edit.
+- **No error monitoring** (e.g. Sentry) or uptime check — a production bug is only discovered if a user reports it. Adding one means a new dependency; ask first per the Dependency Rule.
+- **No automated tests, no CI** — zero test files, no GitHub Actions. Every push deploys straight to production. Not a launch blocker for a solo-maintained app, but the highest-leverage insurance once real users depend on uptime.
+- No SEO/share metadata (no OG/Twitter tags, no meta description, no robots.txt/sitemap) — low priority unless the app starts being link-shared rather than installed directly.
 
 ### Known testing limitation (mobile emulation, still relevant)
 The Browser-pane's **mobile touch emulation has been unreliable across sessions** — clicks (including on completely unrelated elements like nav `<Link>`s) can time out and the pane reports itself stuck/hidden. Don't trust a single mobile-emulated repro as proof of a real bug without also checking whether *anything* clicks in that tab; test via `preset: "desktop"` first as a sanity check, and prefer architectural fixes (e.g. delegate click handling to a big stable container, or use `onClick` instead of hover — done for both This Week's stars and now Universe's clusters) over chasing specific mobile-touch-event theories when the emulator itself is behaving oddly.
@@ -101,7 +124,7 @@ The Browser-pane's **mobile touch emulation has been unreliable across sessions*
 - To test authenticated screens without real Google sign-in, a temporary `?dev=1` bypass was added/removed from `src/App.tsx` (`authLoading`/`session` gate) during debugging sessions — **not currently in the code**, re-add-and-revert if needed rather than leaving it in.
 
 ### Pending / not yet done
-- PWA / App Store packaging — not built.
+- Basic PWA (installable, offline app-shell caching) **is built** — `public/manifest.json` + `public/sw.js`, registered from `src/main.tsx`. App Store/Play Store packaging (a native wrapper — Capacitor or similar) is explicitly deferred to a later phase, not started.
 - Claude API integration for smarter prompts — mentioned in the original brief, still not wired.
 - No way to change name post-onboarding (Settings has category editing but the name field wiring should already work — double check `updateSettings` covers it before assuming this needs building).
 - The "You said: ..." hint on win cards may be redundant with the definition-as-placeholder — noted but never actioned.

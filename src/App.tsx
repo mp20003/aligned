@@ -7,7 +7,10 @@ import Score from './routes/Score'
 import History from './routes/History'
 import Settings from './routes/Settings'
 import Login from './routes/Login'
+import Privacy from './routes/Privacy'
+import Terms from './routes/Terms'
 import NavBar from './components/NavBar'
+import ErrorBoundary from './components/ErrorBoundary'
 
 function AnimatedRoutes({ children }: { children: React.ReactNode }) {
   const location = useLocation()
@@ -32,36 +35,43 @@ function AppRoutes() {
     return <div className="min-h-screen" style={{ background: '#0f0f1a' }} />
   }
 
-  if (!session) {
-    return <Login />
-  }
-
   return (
     <>
       <AnimatedRoutes>
         <Routes>
-          <Route
-            path="/"
-            element={<Navigate to={onboarded ? '/today' : '/onboarding'} replace />}
-          />
-          <Route path="/onboarding" element={<Onboarding />} />
-          <Route path="/today" element={onboarded ? <Today /> : <Navigate to="/onboarding" replace />} />
-          <Route path="/score" element={onboarded ? <Score /> : <Navigate to="/onboarding" replace />} />
-          <Route path="/history" element={onboarded ? <History /> : <Navigate to="/onboarding" replace />} />
-          <Route path="/settings" element={onboarded ? <Settings /> : <Navigate to="/onboarding" replace />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          {!session ? (
+            <Route path="*" element={<Login />} />
+          ) : (
+            <>
+              <Route
+                path="/"
+                element={<Navigate to={onboarded ? '/today' : '/onboarding'} replace />}
+              />
+              <Route path="/onboarding" element={<Onboarding />} />
+              <Route path="/today" element={onboarded ? <Today /> : <Navigate to="/onboarding" replace />} />
+              <Route path="/score" element={onboarded ? <Score /> : <Navigate to="/onboarding" replace />} />
+              <Route path="/history" element={onboarded ? <History /> : <Navigate to="/onboarding" replace />} />
+              <Route path="/settings" element={onboarded ? <Settings /> : <Navigate to="/onboarding" replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </>
+          )}
         </Routes>
       </AnimatedRoutes>
-      <NavBar />
+      {session && <NavBar />}
     </>
   )
 }
 
 export default function App() {
   return (
-    <AppProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </AppProvider>
+    </ErrorBoundary>
   )
 }

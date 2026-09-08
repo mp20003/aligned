@@ -22,3 +22,7 @@ create policy "Users can insert own data"
 create policy "Users can update own data"
   on app_data for update
   using (auth.uid() = user_id);
+
+create policy "Users can delete own data"
+  on app_data for delete
+  using (auth.uid() = user_id);
