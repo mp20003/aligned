@@ -558,7 +558,12 @@ function DayEditor({
       <div className="flex flex-col gap-3 lg:gap-4">
         {CATEGORIES.map(key => (
           <WinCard
-            key={key}
+            // Keyed by date + category, not just category — otherwise React
+            // reuses the same WinCard instance across different selected
+            // days (same position in the tree), and its internal `value`/
+            // `editing`/`skipped` state from the previous day leaks into
+            // the newly-selected day's blank inputs instead of resetting.
+            key={`${dk}-${key}`}
             categoryKey={key}
             label={labels[key].label}
             definition={labels[key].definition}

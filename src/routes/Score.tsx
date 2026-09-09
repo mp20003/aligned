@@ -224,8 +224,10 @@ function getStarPositions(mondayStr: string): [number, number][] {
 }
 
 // ── Star type (seeded per date) ────────────────────────────────────────────────
-// Each type still has its own glow/spike shape, but always exactly one bright
-// core point — no type renders more than one "dot" for a single star.
+// Each type has its own glow shape (radius/opacity), but always exactly one
+// bright core point — no type renders more than one "dot" for a single star.
+// "diffraction" used to also draw cross-shaped spike lines through the star;
+// removed since they read as clutter rather than detail.
 
 type StarType = 'diffraction' | 'giant'
 
@@ -361,10 +363,6 @@ function RealisticStar({ cx, cy, type, dateStr, born }: {
               it regularly overlapped a neighbouring star's own glow, since
               stars can sit as close as 44 units apart. */}
           <circle cx={cx} cy={cy} r={16 * scale} fill={`url(#${id})`} />
-          <line x1={cx - 44 * scale} y1={cy} x2={cx + 44 * scale} y2={cy} stroke="white" strokeWidth="0.8" opacity="0.35" />
-          <line x1={cx} y1={cy - 44 * scale} x2={cx} y2={cy + 44 * scale} stroke="white" strokeWidth="0.8" opacity="0.35" />
-          <line x1={cx - 28 * scale} y1={cy - 28 * scale} x2={cx + 28 * scale} y2={cy + 28 * scale} stroke="white" strokeWidth="0.5" opacity="0.18" />
-          <line x1={cx + 28 * scale} y1={cy - 28 * scale} x2={cx - 28 * scale} y2={cy + 28 * scale} stroke="white" strokeWidth="0.5" opacity="0.18" />
           <circle cx={cx} cy={cy} r={8 * scale} fill={`url(#${id2})`} />
           <circle cx={cx} cy={cy} r={4 * scale} fill="white" />
         </>
@@ -627,7 +625,20 @@ function WeekConstellation({
   const mondayStr = dateKey(week[0])
   const positions = getStarPositions(mondayStr)
   const containerRef = useRef<HTMLDivElement>(null)
+  const svgRef = useRef<SVGSVGElement>(null)
   const [hover, setHover] = useState<HoverInfo | null>(null)
+
+  // The planet/asteroid/moon orbits are SMIL <animateTransform>, which
+  // defaults to starting at document-timeline zero — but some browsers
+  // occasionally leave that timeline paused for a moment after a fresh
+  // mount (especially right after the page-enter transform settles),
+  // which reads as the whole scene sitting still before suddenly starting
+  // to orbit. Explicitly unpausing on mount is the standard nudge to make
+  // sure the timeline is actually running rather than waiting on it.
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => svgRef.current?.unpauseAnimations?.())
+    return () => cancelAnimationFrame(raf)
+  }, [])
 
   const [exploding, setExploding] = useState<ExplodingDay[]>([])
   const [dusts, setDusts] = useState<Set<string>>(() => {
@@ -746,7 +757,7 @@ function WeekConstellation({
           slightly-lighter shade, so the panel doesn't read as a separate
           boxed widget sitting on top of the page. */}
       <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0f0f1a' }}>
-        <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }} aria-hidden="true">
+        <svg ref={svgRef} viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }} aria-hidden="true">
           <WeekBackgroundStars />
 
           {/* Constellation lines */}
@@ -795,9 +806,12 @@ function WeekConstellation({
               onDone={() => handleExplosionDone(e.dateStr)} />
           ))}
 
-          {/* Nova burst overlaid on top of star */}
+          {/* Nova burst overlaid on top of star — keyed distinctly from the
+              star itself (which renders in the block above using the same
+              date string as its key), since they're siblings at this point
+              and React requires unique keys among siblings. */}
           {activeNova && (
-            <NovaBurst key={activeNova.dateStr} cx={activeNova.cx} cy={activeNova.cy} onDone={handleNovaDone} />
+            <NovaBurst key={`nova-${activeNova.dateStr}`} cx={activeNova.cx} cy={activeNova.cy} onDone={handleNovaDone} />
           )}
         </svg>
       </div>
