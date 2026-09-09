@@ -4,7 +4,7 @@ const CACHE = 'triova-v1'
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE).then(c =>
-      c.addAll(['/', '/today', '/history', '/score', '/manifest.json', '/icon.svg'])
+      c.addAll(['/', '/today', '/history', '/score', '/manifest.json', '/icon-192.png'])
     )
   )
   self.skipWaiting()
