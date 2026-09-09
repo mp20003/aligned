@@ -5,10 +5,11 @@
  * Never shown during onboarding.
  */
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router'
 import { useApp } from '../context/AppContext'
 import { dateKey } from '../lib/date'
+import { isPushSupported, getPushSubscriptionState, subscribeToPush, unsubscribeFromPush } from '../lib/push'
 import type { CategoryKey, AppData } from '../types'
 
 const ACCENT_TEXT: Record<CategoryKey, string> = {
@@ -49,6 +50,31 @@ export default function Settings() {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const importRef = useRef<HTMLInputElement>(null)
+
+  const [pushSupported, setPushSupported] = useState(true)
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushError, setPushError] = useState('')
+
+  useEffect(() => {
+    setPushSupported(isPushSupported())
+    getPushSubscriptionState().then(setPushEnabled)
+  }, [])
+
+  async function handleTogglePush() {
+    if (!session) return
+    setPushBusy(true)
+    setPushError('')
+    if (pushEnabled) {
+      await unsubscribeFromPush(session.user.id)
+      setPushEnabled(false)
+    } else {
+      const result = await subscribeToPush(session.user.id)
+      if (result.ok) setPushEnabled(true)
+      else setPushError(result.error)
+    }
+    setPushBusy(false)
+  }
 
   function updateCategory(key: CategoryKey, field: 'label' | 'definition', value: string) {
     setCategories(c => ({ ...c, [key]: { ...c[key], [field]: value } }))
@@ -224,6 +250,35 @@ export default function Settings() {
           <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
         </div>
       </section>
+
+      {/* Daily reminder */}
+      {session && (
+        <section className="flex flex-col gap-3 pt-6" style={divider}>
+          <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">Daily reminder</p>
+          {!pushSupported ? (
+            <p className="font-sans text-xs lg:text-sm text-white/50 leading-relaxed">
+              Not supported on this browser.
+            </p>
+          ) : (
+            <>
+              <p className="font-sans text-xs lg:text-sm text-white/50 leading-relaxed">
+                A single nudge, once a day, only if you haven't shown up for all three yet. No streaks, no guilt — just a reminder.
+              </p>
+              {pushError && (
+                <p className="font-sans text-xs lg:text-sm text-spiritual">{pushError}</p>
+              )}
+              <button
+                onClick={handleTogglePush}
+                disabled={pushBusy}
+                className="w-full py-3 lg:py-3.5 rounded-xl font-sans text-sm lg:text-base text-white/55 hover:text-white/80 transition-colors disabled:opacity-50"
+                style={surfaceBtn}
+              >
+                {pushBusy ? 'Working…' : pushEnabled ? 'Turn off reminder for this device' : 'Enable daily reminder'}
+              </button>
+            </>
+          )}
+        </section>
+      )}
 
       {/* Clear a month */}
       <section className="flex flex-col gap-3 pt-6" style={divider}>

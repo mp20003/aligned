@@ -14,7 +14,7 @@ import { useApp } from '../context/AppContext'
 import { getDailySuggestions, getPastWins } from '../data/suggestions'
 import WinCard from '../components/WinCard'
 import { dateKey } from '../lib/date'
-import type { CategoryKey, DayEntry } from '../types'
+import type { CategoryKey, DayEntry, WeeklyCheckins } from '../types'
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
@@ -78,6 +78,85 @@ function generateInsight(
   if (catCounts[strongest] === catCounts[weakest])
     return `Your three practices are moving in balance. Keep going.`
   return `Your ${labels[strongest].label.toLowerCase()} is your most consistent practice right now.`
+}
+
+// "2026-08-25" -> "Aug 25 – Aug 31" (Monday through Sunday of that week).
+function weekRangeLabel(mondayKey: string): string {
+  const monday = new Date(mondayKey + 'T12:00:00')
+  const sunday = new Date(monday)
+  sunday.setDate(sunday.getDate() + 6)
+  const fmt = (d: Date) => d.toLocaleDateString('default', { month: 'short', day: 'numeric' })
+  return `${fmt(monday)} – ${fmt(sunday)}`
+}
+
+// Only claims a pattern once there's enough data (mirrors generateInsight's
+// own gating) and only when one category is a strict majority — no sentence
+// on a tie, same spirit as generateInsight's tie-handling.
+function generateCheckinInsight(
+  checkins: WeeklyCheckins,
+  labels: Record<CategoryKey, { label: string; definition: string }>
+): string | null {
+  const entries = Object.entries(checkins)
+  if (entries.length < 4) return null
+
+  const counts: Record<CategoryKey, number> = { physical: 0, mental: 0, spiritual: 0 }
+  for (const [, category] of entries) counts[category]++
+
+  const top = CATEGORIES.reduce((a, b) => counts[a] >= counts[b] ? a : b)
+  const isStrictMajority = CATEGORIES.every(c => c === top || counts[c] < counts[top])
+  if (!isStrictMajority || counts[top] === 0) return null
+
+  return `${labels[top].label} has felt hardest ${counts[top]} of your last ${entries.length} weeks.`
+}
+
+function CheckinPatterns({
+  checkins, labels,
+}: {
+  checkins: WeeklyCheckins
+  labels: Record<CategoryKey, { label: string; definition: string }>
+}) {
+  const [open, setOpen] = useState(false)
+  const entries = Object.entries(checkins).sort(([a], [b]) => b.localeCompare(a))
+  if (entries.length === 0) return null
+
+  const insight = generateCheckinInsight(checkins, labels)
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">Your check-ins</p>
+      {insight && (
+        <p className="font-serif text-base lg:text-lg text-white/55 leading-relaxed">{insight}</p>
+      )}
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        className="flex items-center gap-1.5 self-start font-sans text-xs lg:text-sm text-white/50 uppercase tracking-widest hover:text-white/80 transition-colors"
+      >
+        <span>Weekly answers ({entries.length})</span>
+        <svg
+          width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+          strokeLinecap="round" strokeLinejoin="round"
+          className={`shrink-0 transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
+          aria-hidden="true"
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <div className="flex flex-col gap-1.5">
+          {entries.map(([week, category]) => (
+            <div key={week} className="flex items-center justify-between gap-3">
+              <span className="font-sans text-xs lg:text-sm text-white/50">{weekRangeLabel(week)}</span>
+              <span className="font-sans text-xs lg:text-sm" style={{ color: CATEGORY_HEX[category] }}>
+                {labels[category].label}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function getLast30Days(): Date[] {
@@ -318,6 +397,8 @@ export default function History() {
               </p>
             </div>
           )}
+
+          <CheckinPatterns checkins={data.checkins} labels={data.onboarding.categories} />
 
           <BalanceBars days={data.days} labels={data.onboarding.categories} days30={days30} />
 

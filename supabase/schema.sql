@@ -86,3 +86,34 @@ end;
 $$;
 
 grant execute on function merge_app_data(uuid, jsonb, jsonb, jsonb, jsonb) to authenticated;
+
+-- One row per browser/device push subscription, for the daily reminder sent
+-- by api/send-reminders.js via Vercel Cron. The client subscribes/unsubscribes
+-- directly against this table (src/lib/push.ts) using the anon key — only the
+-- cron send itself needs the service-role key, to read across all users.
+create table if not exists push_subscriptions (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table push_subscriptions enable row level security;
+
+create policy "Users can insert own push subscription"
+  on push_subscriptions for insert
+  with check (auth.uid() = user_id);
+
+-- Needed so the client's upsert(..., { onConflict: 'endpoint' }) can update
+-- user_id when a device that already has a subscription signs in as a
+-- different account. No select policy — nothing client-side reads this back,
+-- same reasoning as the events table above.
+create policy "Users can update own push subscription"
+  on push_subscriptions for update
+  using (auth.uid() = user_id);
+
+create policy "Users can delete own push subscription"
+  on push_subscriptions for delete
+  using (auth.uid() = user_id);

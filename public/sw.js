@@ -37,3 +37,30 @@ self.addEventListener('fetch', e => {
     })
   )
 })
+
+// Daily reminder push, sent by api/send-reminders.js via Vercel Cron.
+self.addEventListener('push', e => {
+  let payload = {}
+  try { payload = e.data ? e.data.json() : {} } catch { /* non-JSON payload, use defaults */ }
+  const title = payload.title || 'Triova'
+  e.waitUntil(
+    self.registration.showNotification(title, {
+      body: payload.body || 'Show up for one part of you today.',
+      icon: '/apple-touch-icon.png',
+      badge: '/apple-touch-icon.png',
+      data: { url: payload.url || '/today' },
+    })
+  )
+})
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close()
+  const url = e.notification.data?.url || '/today'
+  e.waitUntil(
+    clients.matchAll({ type: 'window' }).then(clientList => {
+      const existing = clientList.find(c => c.url.startsWith(self.location.origin))
+      if (existing) return existing.focus()
+      return clients.openWindow(url)
+    })
+  )
+})
