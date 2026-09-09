@@ -64,6 +64,15 @@ Also added: `aria-hidden="true"` on purely decorative icons that sit beside alre
 
 **Known, deliberate, not fixed**: the Triova/Score screen's star and cluster tap targets are still delegated-click SVG hit-testing (see the existing note on that screen below) — genuinely keyboard-inaccessible, and fixing it properly would mean the same kind of rearchitecting CLAUDE.md already documents as deliberately avoided once before (per-shape SVG hit targets were tried and reverted for being unreliable). Flagged as a real remaining gap, not silently left out.
 
+### App Store / Play Store launch — decided, not yet started
+Discussed but no code written yet. Decisions made, so a future session doesn't need to re-ask:
+- **Both platforms** (iOS + Android), via **Capacitor** (wraps the existing Vite/React web app in a native project — no rewrite, since there's nothing native-only required beyond what already works).
+- **No local Mac available** — iOS builds/signing need to happen in the cloud. Decided on **Codemagic** over a hand-rolled GitHub Actions + Fastlane pipeline, specifically because its guided code-signing flow matters more when neither the user nor Claude has a Mac to fall back on for troubleshooting.
+- **Codemagic cost reality, confirmed against its own docs** (not assumed): the free tier's 500 min/month is **macOS-only** — iOS builds are genuinely free under that quota. Android builds run on Linux machines, which are **not** covered by the free minutes at all and require billing enabled ($0.045/min — a few cents per build for a solo project, but not literally free). No restriction on app-store submission from the free tier; no team-collaborator support on the individual plan (irrelevant, solo project).
+- **Known, not-yet-scoped blocker for iOS specifically**: Apple requires offering "Sign in with Apple" if any other third-party social login is offered (Triova currently only has Google) — this is a real engineering task (Apple Services ID, Supabase Apple OAuth provider config, a new button/flow in `Login.tsx`), not paperwork, and Apple will reject the app without it. Not started.
+- Also unstarted: Apple Developer Program enrollment ($99/yr), Google Play Developer account ($25 one-time), app icons at required sizes, store-listing screenshots/copy, and the actual `npx cap init`/`cap add ios`/`cap add android` scaffolding in this repo.
+- Next concrete step, whenever this resumes: either start the Capacitor groundwork in the codebase (doesn't depend on any account approval), or write out the full phased checklist first — ask which.
+
 ### App name & domain
 **Triova** (renamed from "Aligned"/"Three Wins"). GitHub repo: `https://github.com/mp20003/aligned` (repo name predates the rename, left as-is). Deployed on Vercel, auto-deploys on push to `main`. Live at **triova.app** (bought directly through Vercel, not Cloudflare — DNS auto-configured, no manual records needed).
 
