@@ -137,9 +137,10 @@ export default function Onboarding() {
             </h1>
           </div>
 
-          {/* What Triova is, what the name means, and why the practice compounds —
-              four short standalone beats with real space between them, rather
-              than dense explanatory paragraphs. */}
+          {/* What Triova is, what the name means, and how the practice compounds
+              into a universe (both the one on screen and the one you're
+              becoming) — four short standalone beats with real space between
+              them, rather than dense explanatory paragraphs. */}
           <div className="flex flex-col gap-7 max-w-xs">
             <div
               className="animate-soft-pulse w-10 h-10 rounded-full mx-auto p-0.5"
@@ -148,13 +149,13 @@ export default function Onboarding() {
               <div className="w-full h-full rounded-full bg-beige" />
             </div>
             <p className="font-serif text-base text-charcoal/75 leading-relaxed">
-              Not a task list. One honest win, three parts of you.
+              Each day, log one honest win for your body, mind, and spirit. No scores. No streaks.
             </p>
             <p className="font-serif text-base text-charcoal/75 leading-relaxed">
-              <em>Tri</em>. <em>Nova</em>. A small burst of light, every time they align.
+              <em>Tri</em> is the three parts of you. <em>Nova</em> is what happens when they align.
             </p>
             <p className="font-serif text-base text-charcoal/75 leading-relaxed">
-              Small and steady adds up, in the app and in your life.
+              Every aligned day is a small burst of light. Keep going, and you're not just watching a universe take shape. You're creating one, and aligning yourself with it.
             </p>
             <p className="font-serif text-lg text-charcoal font-semibold">
               Welcome to Triova.
