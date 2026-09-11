@@ -155,7 +155,13 @@ export default function Onboarding() {
               <em>Tri</em> is the three parts of you. <em>Nova</em> is what happens when they align.
             </p>
             <p className="font-serif text-base text-charcoal/75 leading-relaxed">
-              Every aligned day is a small burst of light. Keep going, and you're not just watching a universe take shape. You're creating one, and aligning yourself with it.
+              Every aligned day is a small burst of light.
+            </p>
+            <p className="font-serif text-base text-charcoal/75 leading-relaxed">
+              Keep going, and you're not just watching a universe take shape.
+            </p>
+            <p className="font-serif text-base text-charcoal/75 leading-relaxed">
+              You're creating one, and aligning yourself with it.
             </p>
             <p className="font-serif text-lg text-charcoal font-semibold">
               Welcome to Triova.
