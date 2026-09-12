@@ -2,7 +2,14 @@
 
 ---
 
-## Current Build State (handoff note — updated 2026-09-09)
+## Current Build State (handoff note — updated 2026-09-12)
+
+### Onboarding intro copy rewritten, category-explanation dashes removed (this session)
+Small, copy-only session — no architecture changes. `src/routes/Onboarding.tsx`:
+- The four intro beats (step 0) were rewritten for clarity: opens with the literal mechanic ("Each day, log one honest win for your body, mind, and spirit. No scores. No streaks.") instead of the more poetic original opener, then earns the Tri/Nova name explanation, then a beat tying the app's own universe visualization to real-life alignment ("Every aligned day is a small burst of light. Keep going, and you're not just watching a universe take shape. You're creating one, and aligning yourself with it.") — split across three separate lines rather than one paragraph, for more pacing/weight, matching the file's existing one-idea-per-line convention. No dashes or colons anywhere in this new copy, per explicit direction this session.
+- The Physical and Mental category explanations (in the `CATEGORY_COPY` map near the top of the file) had their em dashes removed too, rephrased as two short sentences instead (e.g. "Your physical win is about your relationship with your body. Think movement, rest, nourishment, or energy.").
+- Verified live via the usual temporary `?dev=1` bypass (added and fully reverted after, per the existing dev-environment note below) — clicked through intro → Physical → Mental, confirmed both the new beat spacing and the dash-free category text render correctly.
+- Not touched: the "EXAMPLES — TAP ONE TO USE IT" label still has a dash (only the two category explanation sentences were in scope for the dash-removal ask) — worth revisiting if the same "no dashes" preference should extend there too.
 
 ### Real logo shipped, replacing the placeholder icon (this session)
 The app never had a designed logo — `apple-touch-icon.png` was a procedurally-drawn placeholder (`scripts/generate-icon.js`, a pure-Node PNG encoder, no dependencies) using the original stale beige palette, and `public/icon.svg` was a similarly basic flat SVG. Both are now deleted; replaced with real artwork the user provided (`Triova logo.png`, sourced from Triova Docs, not in this repo) — three colored crescent forms (sage/purple/coral) colliding into a bright sparkle core on a dark navy ground.

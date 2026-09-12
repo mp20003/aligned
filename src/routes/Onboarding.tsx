@@ -36,7 +36,7 @@ const STEP_META: Record<CategoryKey, {
   physical: {
     defaultLabel: 'Physical',
     colour: 'physical',
-    explanation: 'Your physical win is about your relationship with your body — movement, rest, nourishment, or energy. It doesn\'t have to be intense. It just has to be intentional.',
+    explanation: 'Your physical win is about your relationship with your body. Think movement, rest, nourishment, or energy. It doesn\'t have to be intense. It just has to be intentional.',
     examples: [
       'A 20-minute walk',
       'Going to bed on time',
@@ -50,7 +50,7 @@ const STEP_META: Record<CategoryKey, {
   mental: {
     defaultLabel: 'Mental',
     colour: 'mental',
-    explanation: 'Your mental win is about your mind — learning, focus, reflection, or creative output. One act of genuine engagement with your thinking.',
+    explanation: 'Your mental win is about your mind. Think learning, focus, reflection, or creative output. One act of genuine engagement with your thinking.',
     examples: [
       'Reading for 30 minutes',
       'Deep focused work',
