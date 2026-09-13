@@ -21,3 +21,30 @@ export function mondayOf(d: Date): Date {
   day.setHours(0, 0, 0, 0)
   return day
 }
+
+const UNIVERSE_CYCLE_DAYS = 90
+const MS_PER_DAY = 86400000
+
+// The Score screen's "Universe" panel runs on a fixed 90-day (~3 month) cycle
+// anchored to the day the account was created — cycle N runs from
+// accountCreated+(N*90) days up to (but not including) accountCreated+((N+1)*90)
+// days. A fixed interval (rather than calendar months) so every cycle is the
+// same length regardless of which month it falls in. 90 days (~13 weeks)
+// keeps well clear of the Universe panel's real capacity (clusters start
+// overlapping past ~25-30 weeks packed into its fixed canvas — see
+// getClusterCenters in Score.tsx) while still giving each cycle enough time
+// to feel like it's actually building up before it resets. Used to decide
+// which weeks' clusters are currently visible and when to play the
+// "universe resets" animation.
+export function getUniverseCycle(accountCreated: Date, now: Date): { index: number; start: Date; end: Date } {
+  const anchor = new Date(accountCreated)
+  anchor.setHours(0, 0, 0, 0)
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+
+  const daysSince = Math.floor((today.getTime() - anchor.getTime()) / MS_PER_DAY)
+  const index = Math.max(0, Math.floor(daysSince / UNIVERSE_CYCLE_DAYS))
+  const start = new Date(anchor.getTime() + index * UNIVERSE_CYCLE_DAYS * MS_PER_DAY)
+  const end = new Date(anchor.getTime() + (index + 1) * UNIVERSE_CYCLE_DAYS * MS_PER_DAY)
+  return { index, start, end }
+}

@@ -11,7 +11,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useApp } from '../context/AppContext'
-import { dateKey, mondayOf } from '../lib/date'
+import { dateKey, mondayOf, getUniverseCycle } from '../lib/date'
 import type { CategoryKey } from '../types'
 
 const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
@@ -131,6 +131,24 @@ function formatWeekRange(week: Date[]): string {
 function formatDayLabel(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00')
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
+function formatCycleDate(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+// Whole days between two dates, ignoring time-of-day (so a cycle boundary at
+// 3pm doesn't read as an extra day depending on when "now" is checked).
+function daysUntil(from: Date, to: Date): number {
+  const a = new Date(from); a.setHours(0, 0, 0, 0)
+  const b = new Date(to); b.setHours(0, 0, 0, 0)
+  return Math.round((b.getTime() - a.getTime()) / 86400000)
+}
+
+function formatResetLabel(daysLeft: number): string {
+  if (daysLeft <= 0) return 'Resets today'
+  if (daysLeft === 1) return 'Resets tomorrow'
+  return `Resets in ${daysLeft} days`
 }
 
 // ── Procedural space names (seeded per date / week) ────────────────────────────
@@ -906,20 +924,146 @@ function NebulaField() {
   )
 }
 
+// A big, panel-wide "the old universe collapses into light and a new one is
+// born" burst — the same visual family as NovaBurst/ExplosionParticles but
+// scaled up to fill the whole Universe panel, since this is a much bigger
+// event than a single star. Plays once per cycle transition (see
+// UniversePanel's bursting state) — never replayed for a cycle already seen.
+function UniverseRebirthBurst({ w, h }: { w: number; h: number }) {
+  const cx = w / 2, cy = h / 2
+  const [particles] = useState(() => Array.from({ length: 36 }, () => {
+    const colors = ['#1D9E75', '#7F77DD', '#D85A30', '#FFFFFF']
+    return {
+      angle: Math.random() * Math.PI * 2,
+      dist: 60 + Math.random() * 110,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      size: 1 + Math.random() * 2.2,
+    }
+  }))
+  const ringColors = ['#FFFFFF', '#1D9E75', '#7F77DD', '#D85A30']
+
+  return (
+    <g>
+      <rect x={0} y={0} width={w} height={h} fill="white">
+        <animate attributeName="opacity" values="0;0.85;0" keyTimes="0;0.16;1" dur="1.3s" fill="freeze" />
+      </rect>
+      {ringColors.map((color, i) => (
+        <circle key={color} cx={cx} cy={cy} r={0} fill="none" stroke={color} strokeWidth={i === 0 ? 2 : 1.5}>
+          <animate attributeName="r" from="0" to={140 + i * 12} dur="1.4s" begin={`${i * 0.08}s`} fill="freeze" />
+          <animate attributeName="opacity" from="0.9" to="0" dur="1.4s" begin={`${i * 0.08}s`} fill="freeze" />
+        </circle>
+      ))}
+      {particles.map((p, i) => {
+        const dx = Math.cos(p.angle) * p.dist
+        const dy = Math.sin(p.angle) * p.dist
+        return (
+          <circle key={i} cx={cx} cy={cy} r={p.size} fill={p.color}>
+            <animate attributeName="cx" to={cx + dx} dur="1.6s" fill="freeze" />
+            <animate attributeName="cy" to={cy + dy} dur="1.6s" fill="freeze" />
+            <animate attributeName="opacity" from="1" to="0" dur="1.6s" fill="freeze" />
+          </circle>
+        )
+      })}
+    </g>
+  )
+}
+
+// Explains the monthly reset in the app's own identity/metaphor voice, and —
+// just as importantly — reassures the user nothing is actually deleted, since
+// a "universe exploding" animation could otherwise read as data loss.
+function UniverseCycleModal({ cycleEnd, onClose }: { cycleEnd: Date; onClose: () => void }) {
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-6 py-12 overflow-y-auto"
+      style={{ background: 'rgba(5,5,12,0.94)' }}
+      onClick={onClose}
+    >
+      <div className="w-full max-w-sm flex flex-col items-center gap-4 text-center" onClick={e => e.stopPropagation()}>
+        <p className="font-sans text-xs uppercase tracking-widest text-white/50">Why the universe resets</p>
+        <p className="font-serif text-base text-white/90 leading-relaxed">
+          Real universes don't stay still. They expand, collapse, and begin again.
+        </p>
+        <p className="font-serif text-base text-white/90 leading-relaxed">
+          Yours works the same way. Every three months, on the day you started Triova, it folds back into light and a new one takes its place.
+        </p>
+        <p className="font-serif text-base text-white/90 leading-relaxed">
+          Nothing you've logged is ever lost. Every win still lives in your History exactly as you left it. Only this view begins again, so each season becomes its own small universe to build.
+        </p>
+        <p className="font-sans text-xs text-white/50 mt-1">Next reset: {formatCycleDate(cycleEnd)}</p>
+        <button
+          onClick={onClose}
+          className="mt-2 font-sans text-xs text-white/50 hover:text-white/80 transition-colors underline underline-offset-4"
+        >
+          Close
+        </button>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
 function UniversePanel({
   weeks,
   days,
   onSelectWeek,
+  accountCreated,
 }: {
   weeks: Date[][]
   days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown } | null>
   onSelectWeek: (week: Date[]) => void
+  accountCreated: Date
 }) {
   const padding = 36
   const containerRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<HoverInfo | null>(null)
-  const centers = getClusterCenters(weeks, UNI_W, UNI_H, padding)
+  const [showCycleInfo, setShowCycleInfo] = useState(false)
+
+  const cycle = getUniverseCycle(accountCreated, new Date())
+
+  const [seenCycle, setSeenCycle] = useState<number | null>(() => {
+    const raw = localStorage.getItem('triova-universe-cycle-seen')
+    return raw === null ? null : Number(raw)
+  })
+  const [bursting, setBursting] = useState(() => seenCycle !== null && seenCycle < cycle.index)
+
+  useEffect(() => {
+    if (seenCycle === null) {
+      // First time this device has ever looked at the universe — nothing to
+      // reset from, so just record the current cycle without animating.
+      localStorage.setItem('triova-universe-cycle-seen', String(cycle.index))
+      setSeenCycle(cycle.index)
+      return
+    }
+    if (seenCycle < cycle.index) {
+      const t = setTimeout(() => {
+        localStorage.setItem('triova-universe-cycle-seen', String(cycle.index))
+        setSeenCycle(cycle.index)
+        setBursting(false)
+      }, 1800)
+      return () => clearTimeout(t)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Weeks belonging to the cycle that just ended, shown fading out during the
+  // burst — a week counts if any part of it (its Sunday) fell in that cycle.
+  const previousCycleWeeks = bursting
+    ? weeks.filter(w => {
+        const sunday = dateKey(w[6])
+        const prevStart = dateKey(cycle.start)
+        return sunday < prevStart
+      })
+    : []
+
+  // Weeks belonging to the current cycle — a week counts in if any part of it
+  // (its Sunday) has reached the cycle's start date. Underlying win data for
+  // earlier weeks is untouched; they just stop being rendered as clusters here.
+  const visibleWeeks = weeks.filter(w => dateKey(w[6]) >= dateKey(cycle.start))
+
+  const renderedWeeks = bursting ? previousCycleWeeks : visibleWeeks
+  const centers = getClusterCenters(renderedWeeks, UNI_W, UNI_H, padding)
   const totalStars = weeks.reduce((acc, w) => acc + getAlignedDates(w, days).length, 0)
+  const daysLeft = daysUntil(new Date(), cycle.end)
 
   function handleClusterHover(e: React.MouseEvent, mondayStr: string, week: Date[]) {
     const rect = containerRef.current?.getBoundingClientRect()
@@ -934,18 +1078,28 @@ function UniversePanel({
 
   return (
     <div className="flex flex-col gap-3 lg:h-full">
+      {showCycleInfo && <UniverseCycleModal cycleEnd={cycle.end} onClose={() => setShowCycleInfo(false)} />}
       <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
         <p className="font-sans text-xs uppercase tracking-widest font-medium text-white/50">Your universe</p>
-        <p className="font-sans text-xs font-medium text-white/50">
-          {totalStars} star{totalStars !== 1 ? 's' : ''} across your journey
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="font-sans text-xs font-medium text-white/50">
+            {totalStars} star{totalStars !== 1 ? 's' : ''} across your journey
+          </p>
+          <button
+            onClick={() => setShowCycleInfo(true)}
+            className="font-sans text-xs font-medium text-white/50 hover:text-white/80 transition-colors underline underline-offset-4"
+          >
+            {formatResetLabel(daysLeft)}
+          </button>
+        </div>
       </div>
       <div className="relative">
         <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0f0f1a' }}>
           <svg viewBox={`0 0 ${UNI_W} ${UNI_H}`} className="w-full" aria-hidden="true">
           <NebulaField />
-          {weeks.map((week, wi) => {
-            const isCurrent = wi === weeks.length - 1
+          <g className={bursting ? 'universe-fade-out' : undefined} pointerEvents={bursting ? 'none' : undefined}>
+          {renderedWeeks.map((week, wi) => {
+            const isCurrent = !bursting && wi === renderedWeeks.length - 1
             const mondayStr = dateKey(week[0])
             const [cx, cy] = centers[wi]
 
@@ -999,6 +1153,8 @@ function UniversePanel({
               </g>
             )
           })}
+          </g>
+          {bursting && <UniverseRebirthBurst w={UNI_W} h={UNI_H} />}
           </svg>
         </div>
         {hover && <HoverCard {...hover} />}
@@ -1008,7 +1164,9 @@ function UniversePanel({
           taller. */}
       <div className="hidden lg:block flex-1" />
       <p className="font-serif text-sm text-white/50 italic text-center">
-        Each cluster is one week of your life — the brighter it glows, the more days you stayed aligned.
+        {bursting
+          ? 'Your universe is folding back into light, and a new one is beginning.'
+          : 'Each cluster is one week of your life — the brighter it glows, the more days you stayed aligned.'}
       </p>
     </div>
   )
@@ -1060,7 +1218,8 @@ function ExpandedWeekModal({
 }
 
 export default function Pulse() {
-  const { data } = useApp()
+  const { data, session } = useApp()
+  const accountCreated = session ? new Date(session.user.created_at) : new Date()
   const week = getCurrentWeek()
   const allWeeks = getAllWeeks(data.days)
   const weekAligned = getAlignedDates(week, data.days).length
@@ -1113,7 +1272,7 @@ export default function Pulse() {
         </div>
 
         {/* Universe */}
-        <UniversePanel weeks={allWeeks} days={data.days} onSelectWeek={setExpandedWeek} />
+        <UniversePanel weeks={allWeeks} days={data.days} onSelectWeek={setExpandedWeek} accountCreated={accountCreated} />
       </div>
     </div>
   )

@@ -33,10 +33,16 @@
   50%       { transform: translate(2px, -4px) scale(1.08); opacity: 0.7; }
 }
 
+@keyframes universe-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
 .star-born    { animation: star-born 0.7s cubic-bezier(0.34,1.56,0.64,1) forwards; }
 .star-full    { animation: star-twinkle 3.5s ease-in-out infinite; }
 .star-partial { animation: star-dim-pulse 4s ease-in-out infinite; }
 .star-drift   { animation: universe-drift 7s ease-in-out infinite; }
+.universe-fade-out { animation: universe-fade-out 1.6s ease-in forwards; }
 
 /* ── Page transition ──────────────────────────────────────────────── */
 
