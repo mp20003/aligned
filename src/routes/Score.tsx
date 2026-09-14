@@ -1217,7 +1217,7 @@ function ExpandedWeekModal({
   )
 }
 
-export default function Pulse() {
+export default function Score() {
   const { data, session } = useApp()
   const accountCreated = session ? new Date(session.user.created_at) : new Date()
   const week = getCurrentWeek()

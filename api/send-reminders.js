@@ -8,8 +8,20 @@
 // read across every user's data — never exposed to client code.
 import { createClient } from '@supabase/supabase-js'
 import webpush from 'web-push'
+import { timingSafeEqual } from 'crypto'
 
 const CATEGORIES = ['physical', 'mental', 'spiritual']
+
+// Plain !== leaks how many leading bytes matched via response timing — low
+// value here (this only guards a non-destructive cron endpoint), but a
+// constant-time check is the standard, essentially-free way to compare a
+// secret against user input.
+function safeEqual(a, b) {
+  const bufA = Buffer.from(a)
+  const bufB = Buffer.from(b)
+  if (bufA.length !== bufB.length) return false
+  return timingSafeEqual(bufA, bufB)
+}
 
 function todayKey() {
   const d = new Date()
@@ -28,7 +40,7 @@ function buildMessage(missing, labels) {
 export default async function handler(req, res) {
   const cronSecret = process.env.CRON_SECRET
   const authHeader = req.headers.authorization || ''
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret || !safeEqual(authHeader, `Bearer ${cronSecret}`)) {
     res.status(401).json({ error: 'Unauthorized' })
     return
   }

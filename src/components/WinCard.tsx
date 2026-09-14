@@ -12,7 +12,7 @@
  * Never shows streaks or counts. Never forces all three wins.
  */
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import type { CategoryKey, WinEntry } from '../types'
 
 export const ACCENT: Record<CategoryKey, { text: string; border: string; bg: string; bar: string }> = {
@@ -93,6 +93,26 @@ export default function WinCard({
   const [previouslyOpen, setPreviouslyOpen] = useState(false)
   const accent = ACCENT[categoryKey]
   const trimmedValue = value.trim()
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Tapping a suggestion/bank/past-win chip fills the field, but if the user
+  // then keeps typing without clearing it first, the new characters just
+  // insert at the cursor — silently producing run-together text. Selecting
+  // the filled text right after means typing immediately replaces it
+  // (standard textarea behavior for a selection); a deliberate click to
+  // reposition the cursor first still works normally. Sets the DOM value
+  // directly (not just React state) before selecting — React hasn't
+  // re-rendered yet at this point in the click handler, so selecting
+  // immediately after only setValue() would select the *previous* value.
+  function fillValue(text: string) {
+    const el = textareaRef.current
+    if (el) {
+      el.value = text
+      el.focus()
+      el.select()
+    }
+    setValue(text)
+  }
 
   function handleDone() {
     if (value.trim()) setReflecting(true)
@@ -187,7 +207,7 @@ export default function WinCard({
             {dailySuggestions.map(s => (
               <button
                 key={s}
-                onClick={() => setValue(s)}
+                onClick={() => fillValue(s)}
                 className={`px-3 py-1.5 rounded-full font-sans text-xs lg:text-sm transition-all duration-150 chip-press ${
                   value === s
                     ? `${accent.bg} text-white border-transparent shadow-sm`
@@ -215,7 +235,7 @@ export default function WinCard({
               >
                 <button
                   type="button"
-                  onClick={() => setValue(w)}
+                  onClick={() => fillValue(w)}
                   className={`pl-3 pr-1.5 py-1.5 font-sans text-xs lg:text-sm rounded-l-full chip-press ${
                     value === w ? 'text-white' : 'text-white/50 hover:text-white/80'
                   }`}
@@ -263,7 +283,7 @@ export default function WinCard({
               {pastWins.map(w => (
                 <button
                   key={w}
-                  onClick={() => setValue(w)}
+                  onClick={() => fillValue(w)}
                   className={`px-3 py-1.5 rounded-full font-sans text-xs lg:text-sm transition-all duration-150 chip-press ${
                     value === w
                       ? `${accent.bg} text-white border-transparent shadow-sm`
@@ -287,6 +307,7 @@ export default function WinCard({
 
       {/* Free text */}
       <textarea
+        ref={textareaRef}
         value={value}
         onChange={e => setValue(e.target.value)}
         placeholder="Or write your own…"

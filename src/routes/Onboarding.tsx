@@ -11,7 +11,7 @@
  * Props: none (reads/writes via useApp context, navigates via React Router).
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router'
 import { useApp } from '../context/AppContext'
 import type { CategoryKey } from '../types'
@@ -111,6 +111,31 @@ export default function Onboarding() {
 
   function updateDraft(key: CategoryKey, patch: Partial<CategoryDraft>) {
     setDrafts(d => ({ ...d, [key]: { ...d[key], ...patch } }))
+  }
+
+  // Only one category's definition textarea is ever mounted at a time (the
+  // step-gated early returns below render one or none), so a single ref is
+  // enough to reach whichever one is current.
+  const definitionRef = useRef<HTMLTextAreaElement>(null)
+
+  // Tapping an example fills the field, but if the user then keeps typing
+  // without clearing it first, the new characters just insert wherever the
+  // cursor happens to be — silently producing run-together text like
+  // "Sitting quietlyBeing fully present". Selecting the filled text right
+  // after means typing immediately replaces it (standard textarea
+  // behavior for a selection), while a deliberate click to reposition the
+  // cursor first still works normally. Sets the DOM value directly (not
+  // just React state) before selecting — React hasn't re-rendered yet at
+  // this point in the click handler, so selecting immediately after only
+  // updateDraft() would select the *previous* value.
+  function fillDefinition(categoryKey: CategoryKey, text: string) {
+    const el = definitionRef.current
+    if (el) {
+      el.value = text
+      el.focus()
+      el.select()
+    }
+    updateDraft(categoryKey, { definition: text })
   }
 
   function handleFinish() {
@@ -277,7 +302,7 @@ export default function Onboarding() {
               {meta.examples.map(ex => (
                 <button
                   key={ex}
-                  onClick={() => updateDraft(categoryKey, { definition: ex })}
+                  onClick={() => fillDefinition(categoryKey, ex)}
                   className={`px-3 py-1.5 rounded-full font-sans text-xs border transition-colors ${
                     draft.definition === ex
                       ? `${accentBg} text-white border-transparent`
@@ -296,6 +321,7 @@ export default function Onboarding() {
               For me, a {isSpiritual ? (draft.customLabel || draft.label || 'Spiritual') : meta.defaultLabel} win means…
             </label>
             <textarea
+              ref={definitionRef}
               value={draft.definition}
               onChange={e => updateDraft(categoryKey, { definition: e.target.value })}
               placeholder={meta.placeholder}

@@ -9,7 +9,7 @@
  * Never shows a partial score. Never shows streaks.
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router'
 import { useApp } from '../context/AppContext'
@@ -50,6 +50,32 @@ function markWeeklySkipped(weekKey: string) {
 
 function todayKey() {
   return dateKey(new Date())
+}
+
+// `date` used to be computed once per render via a plain `todayKey()` call
+// with nothing to force a re-render at midnight — a tab left open across
+// midnight without any interaction would keep logging wins against the
+// previous day's stale, closure-captured date until some unrelated state
+// change happened to trigger a re-render. Re-checks on visibility/focus
+// (a phone/tab being reopened is the realistic way this bug was hit),
+// rather than polling on a timer for a screen that's likely backgrounded.
+function useTodayKey(): string {
+  const [today, setToday] = useState(todayKey)
+  useEffect(() => {
+    function check() {
+      setToday(prev => {
+        const now = todayKey()
+        return prev === now ? prev : now
+      })
+    }
+    document.addEventListener('visibilitychange', check)
+    window.addEventListener('focus', check)
+    return () => {
+      document.removeEventListener('visibilitychange', check)
+      window.removeEventListener('focus', check)
+    }
+  }, [])
+  return today
 }
 
 // Portaled straight to <body>: the page-transition wrapper around every
@@ -111,15 +137,15 @@ export default function Today() {
   const { data, logWin, clearWin, addToBank, removeFromBank, recordWeeklyCheckin } = useApp()
   const navigate = useNavigate()
 
-  const date = todayKey()
+  const date = useTodayKey()
   const entry = data.days[date] ?? { physical: null, mental: null, spiritual: null }
   const categories = data.onboarding.categories
   const isFirstDay = Object.keys(data.days).length === 0
 
   const allDone = entry.physical !== null && entry.mental !== null && entry.spiritual !== null
 
-  const isSunday = new Date().getDay() === 0
-  const thisMonday = mondayOf(new Date())
+  const isSunday = new Date(date + 'T12:00:00').getDay() === 0
+  const thisMonday = mondayOf(new Date(date + 'T12:00:00'))
   const weekKey = dateKey(thisMonday)
   const prevMonday = new Date(thisMonday)
   prevMonday.setDate(prevMonday.getDate() - 7)
@@ -272,7 +298,11 @@ export default function Today() {
       <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4 lg:gap-6">
         {(['physical', 'mental', 'spiritual'] as CategoryKey[]).map(key => (
           <WinCard
-            key={key}
+            // Keyed by date + category, same as History — otherwise React
+            // reuses the same WinCard instance across a date change (e.g.
+            // crossing midnight with the tab open) and its `editing`/
+            // `skipped` local state leaks into the newly-current day.
+            key={`${date}-${key}`}
             categoryKey={key}
             label={categories[key].label}
             definition={categories[key].definition}

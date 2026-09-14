@@ -64,6 +64,41 @@ function clearDateFlags(predicate: (dateStr: string) => boolean) {
 
 export type SyncStatus = 'synced' | 'syncing' | 'error' | 'offline'
 
+// Persists sync failures (only — 'synced'/'syncing' are never worth
+// remembering) across reloads, so a device that closes right after a failed
+// write doesn't come back showing a false "Synced" with no way to know its
+// last edit never reached the server. Also remembers which write mode
+// (merge vs. plain overwrite) that failed write used, so a retry after
+// reload uses the same mode — critical for logWin's merge writes, since
+// silently falling back to plain-overwrite on retry could clobber another
+// device's concurrent edits, the exact thing merge_app_data exists to avoid.
+const SYNC_STATE_KEY = 'three-wins-sync-state'
+
+function loadPersistedSyncState(): { status: SyncStatus; merge?: boolean } {
+  try {
+    const raw = localStorage.getItem(SYNC_STATE_KEY)
+    if (!raw) return { status: 'synced' }
+    const parsed = JSON.parse(raw)
+    if (parsed.status === 'error' || parsed.status === 'offline') return parsed
+    return { status: 'synced' }
+  } catch {
+    return { status: 'synced' }
+  }
+}
+
+function savePersistedSyncState(status: SyncStatus, merge?: boolean) {
+  try {
+    if (status === 'error' || status === 'offline') {
+      localStorage.setItem(SYNC_STATE_KEY, JSON.stringify({ status, merge }))
+    } else {
+      localStorage.removeItem(SYNC_STATE_KEY)
+    }
+  } catch {
+    // best-effort — a failure to persist this just means a reload won't
+    // remember the failure, not worth surfacing further
+  }
+}
+
 type AppContextValue = {
   data: AppData
   session: Session | null
@@ -91,12 +126,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<AppData>(loadLocal)
   const [session, setSession] = useState<Session | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced')
+  const [syncStatus, setSyncStatusState] = useState<SyncStatus>(() => loadPersistedSyncState().status)
   const dataRef = useRef(data)
   dataRef.current = data
   const sessionRef = useRef(session)
   sessionRef.current = session
   const openedLoggedRef = useRef(false)
+  // Mirrors `update` once it's defined below, so the "load remote data"
+  // effect (declared first) can call the latest version without needing it
+  // in its own dependency array — same pattern as dataRef/sessionRef above.
+  const updateRef = useRef<((next: AppData, options?: { merge?: boolean }) => void) | null>(null)
+
+  const setSyncStatus = useCallback((status: SyncStatus, merge?: boolean) => {
+    setSyncStatusState(status)
+    savePersistedSyncState(status, merge)
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -118,7 +162,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [session])
 
-  // Load remote data whenever a user signs in.
+  // Load remote data on sign-in (and on a fresh page load, once the
+  // existing session is confirmed). Deliberately keyed on the user id, not
+  // the whole `session` object — Supabase silently issues a new session
+  // object (same user, new access_token) on every background token refresh
+  // (roughly hourly), and keying on `session` itself would re-run this full
+  // fetch-and-overwrite on every one of those, creating a race window where
+  // a write that's still in flight could get clobbered by a stale read.
+  // Keying on the user id only re-runs this on an actual sign-in/sign-out/
+  // account switch, which is the only time it should.
   useEffect(() => {
     if (!session) return
     let cancelled = false
@@ -137,6 +189,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       if (row) {
+        const pending = loadPersistedSyncState()
+        if (pending.status !== 'synced') {
+          // The last write from a previous session never made it to the
+          // server — the local cached copy is the most recent thing the
+          // user actually did, so trust it over this (stale) server row
+          // and retry pushing it now, instead of silently overwriting the
+          // unsynced edit with old server data.
+          updateRef.current?.(dataRef.current, { merge: pending.merge })
+          return
+        }
         const merged: AppData = {
           onboarding: row.onboarding,
           days: row.days,
@@ -159,7 +221,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     })()
     return () => { cancelled = true }
-  }, [session])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user.id])
 
   // options.merge picks the server-side jsonb-merge RPC instead of a plain
   // upsert — see merge_app_data in supabase/schema.sql for exactly what it
@@ -173,10 +236,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setData(next)
     if (session) {
       if (!navigator.onLine) {
-        setSyncStatus('offline')
+        setSyncStatus('offline', options?.merge)
         return
       }
-      setSyncStatus('syncing')
+      setSyncStatus('syncing', options?.merge)
       const request = options?.merge
         ? supabase.rpc('merge_app_data', {
             p_user_id: session.user.id,
@@ -187,17 +250,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
           })
         : supabase
             .from('app_data')
-            .upsert({ user_id: session.user.id, onboarding: next.onboarding, days: next.days, bank: next.bank, checkins: next.checkins })
+            .upsert({
+              user_id: session.user.id,
+              onboarding: next.onboarding,
+              days: next.days,
+              bank: next.bank,
+              checkins: next.checkins,
+              updated_at: new Date().toISOString(),
+            })
       request.then(({ error }) => {
         if (error) {
           console.error('Failed to sync app data', error)
-          setSyncStatus('error')
+          setSyncStatus('error', options?.merge)
         } else {
           setSyncStatus('synced')
         }
       })
     }
   }, [session])
+
+  updateRef.current = update
 
   // Retry the most recent local state against Supabase — used after a failed
   // or offline sync. Re-running update() with the current data and the same
