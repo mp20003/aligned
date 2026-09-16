@@ -106,6 +106,37 @@ function strHash(str: string): number {
 
 const CROP_RADIUS_DEG = 40 // angular radius from zenith kept in the crop
 
+// ---- The real Milky Way band ----
+// Public-domain IAU (1958) galactic coordinate constants — J2000 position
+// of the North Galactic Pole and the galactic longitude of the North
+// Celestial Pole. Used only to trace the real galactic equator (where the
+// Milky Way's band actually sits in the sky), the same way any planetarium
+// app draws it — not derived from or dependent on the star catalog.
+const NGP_RA_DEG = 192.85948
+const NGP_DEC_DEG = 27.12825
+const NCP_GALACTIC_LON_DEG = 122.93192
+
+function galacticToEquatorial(lDeg: number, bDeg: number): { raHours: number; decDeg: number } {
+  const l = toRad(lDeg), b = toRad(bDeg)
+  const ngpDec = toRad(NGP_DEC_DEG)
+  const lncpMinusL = toRad(NCP_GALACTIC_LON_DEG) - l
+
+  const sinDec = Math.sin(ngpDec) * Math.sin(b) + Math.cos(ngpDec) * Math.cos(b) * Math.cos(lncpMinusL)
+  const dec = Math.asin(Math.max(-1, Math.min(1, sinDec)))
+
+  const y = Math.cos(b) * Math.sin(lncpMinusL)
+  const x = Math.cos(ngpDec) * Math.sin(b) - Math.sin(ngpDec) * Math.cos(b) * Math.cos(lncpMinusL)
+  const raDeg = NGP_RA_DEG + toDeg(Math.atan2(y, x))
+
+  return { raHours: (((raDeg / 15) % 24) + 24) % 24, decDeg: toDeg(dec) }
+}
+
+// A polyline (as zenith-centered r/theta points, same convention as
+// SkyStar) tracing the real galactic equator through this cycle's crop.
+// Split into segments wherever the band dips below the horizon, so the
+// caller doesn't draw a line jumping across an invisible gap.
+export type SkyPoint = { r: number; theta: number }
+
 // The core entry point: given a user's location, a cycle's start date, and
 // how many days are in the cycle, returns the fixed set of real stars
 // (brightest `cycleDays` stars near zenith at the reference moment) and
@@ -116,7 +147,7 @@ export function getSkyForCycle(
   cycleStart: Date,
   cycleDays: number,
   tiebreakSeed: string
-): { stars: SkyStar[]; lines: [number, number][] } {
+): { stars: SkyStar[]; lines: [number, number][]; milkyWay: SkyPoint[][] } {
   const moment = referenceMoment(cycleStart, lon)
   const jd = julianDate(moment)
   const lst = (gmstDegrees(jd) + lon) % 360
@@ -149,7 +180,26 @@ export function getSkyForCycle(
 
   const lines = LINES.filter(([a, b]) => selectedIds.has(a) && selectedIds.has(b))
 
-  return { stars, lines }
+  // Trace the real galactic equator (b=0) through this same crop, using the
+  // same LST/lat and azimuth nudge as the stars above, so it lines up with
+  // them physically rather than floating independently.
+  const milkyWay: SkyPoint[][] = []
+  let current: SkyPoint[] = []
+  for (let l = 0; l <= 360; l += 3) {
+    const { raHours, decDeg } = galacticToEquatorial(l, 0)
+    const { alt, az } = raDecToAltAz(raHours, decDeg, lat, lst)
+    if (alt > -2) {
+      current.push({ r: (90 - alt) / CROP_RADIUS_DEG, theta: toRad(az - nudgeAz) })
+    } else if (current.length > 1) {
+      milkyWay.push(current)
+      current = []
+    } else {
+      current = []
+    }
+  }
+  if (current.length > 1) milkyWay.push(current)
+
+  return { stars, lines, milkyWay }
 }
 
 export function getStarById(id: number): CatalogStar | undefined {

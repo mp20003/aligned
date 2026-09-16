@@ -21,7 +21,7 @@ import { createPortal } from 'react-dom'
 import { Link } from 'react-router'
 import { useApp } from '../context/AppContext'
 import { dateKey, getUniverseCycle, UNIVERSE_CYCLE_DAYS } from '../lib/date'
-import { getSkyForCycle, type SkyStar } from '../lib/sky'
+import { getSkyForCycle, type SkyStar, type SkyPoint } from '../lib/sky'
 import { generateSkyPoster } from '../lib/skyPoster'
 import type { CategoryKey } from '../types'
 
@@ -188,10 +188,19 @@ function HoverCard({ x, y, title, subtitle, colorName, colorHex, brightness }: H
 const SVG_W = 220
 const SVG_H = 200
 const PROJECT_RADIUS = 86 // px from panel center to the crop's outer edge
+// sky.ts crops a genuinely circular patch of sky (CROP_RADIUS_DEG, an
+// angular radius from zenith) — framing it in a rectangle was dishonest to
+// the actual shape of the data. This is the same reasoning skyPoster.ts's
+// export already uses; the live/thumbnail panels now match it.
+const CIRCLE_R = 96
+
+function projectPoint(r: number, theta: number): [number, number] {
+  const rr = r * PROJECT_RADIUS
+  return [SVG_W / 2 + rr * Math.sin(theta), SVG_H / 2 - rr * Math.cos(theta)]
+}
 
 function project(star: SkyStar): [number, number] {
-  const r = star.r * PROJECT_RADIUS
-  return [SVG_W / 2 + r * Math.sin(star.theta), SVG_H / 2 - r * Math.cos(star.theta)]
+  return projectPoint(star.r, star.theta)
 }
 
 // Faint decorative sprinkle behind a panel — pure atmosphere, not tied to
@@ -234,25 +243,21 @@ function BackgroundStars({ w, h, seed, count }: { w: number; h: number; seed: st
   )
 }
 
-// Soft colored dust — nebula blobs plus fine coloured specks, using the
-// app's own category palette (plus a couple of neutral space tones) so the
-// live sky reads as richer without inventing meaning that isn't there —
-// pure atmosphere, fixed seed, doesn't reshuffle on re-render.
-const DUST_COLORS = ['#1D9E75', '#7F77DD', '#D85A30', '#6FA8FF'] as const
+// Faint nebulosity — a couple of soft, muted blobs (dim steel-blue and
+// dim warm grey, the two tones real astrophotos actually show: reflection
+// nebulae skew blue, emission nebulae skew warm) at very low opacity.
+// Previously this used the app's own bright category colors and scattered
+// colored specks across the whole field — read as confetti, not sky, and
+// wasn't tied to real data anyway. Just soft haze now, fixed seed.
+const NEBULA_COLORS = ['#3a5a82', '#4a3a30'] as const
 
 function DustField({ w, h, seed }: { w: number; h: number; seed: string }) {
   const rand = seededRand(strHash(seed))
-  const blobs = Array.from({ length: 4 }, () => ({
+  const blobs = Array.from({ length: 3 }, () => ({
     cx: rand() * w, cy: rand() * h,
-    r: 30 + rand() * 45,
-    color: DUST_COLORS[Math.floor(rand() * DUST_COLORS.length)],
-    opacity: 0.05 + rand() * 0.07,
-  }))
-  const specks = Array.from({ length: 70 }, () => ({
-    x: rand() * w, y: rand() * h,
-    r: 0.4 + rand() * 0.9,
-    color: DUST_COLORS[Math.floor(rand() * DUST_COLORS.length)],
-    opacity: 0.08 + rand() * 0.16,
+    r: 40 + rand() * 50,
+    color: NEBULA_COLORS[Math.floor(rand() * NEBULA_COLORS.length)],
+    opacity: 0.04 + rand() * 0.05,
   }))
   return (
     <g>
@@ -265,7 +270,32 @@ function DustField({ w, h, seed }: { w: number; h: number; seed: string }) {
         ))}
       </defs>
       {blobs.map((b, i) => <circle key={i} cx={b.cx} cy={b.cy} r={b.r} fill={`url(#dust-blob-${seed}-${i})`} />)}
-      {specks.map((s, i) => <circle key={i} cx={s.x} cy={s.y} r={s.r} fill={s.color} opacity={s.opacity} />)}
+    </g>
+  )
+}
+
+// The real Milky Way band — traced from actual galactic-plane coordinates
+// (see sky.ts), not invented decoration. Rendered as a few overlaid soft
+// strokes (wide/faint to narrow/brighter) to approximate its real diffuse
+// look, since a single hard line would read as a UI element, not a sky.
+function MilkyWayBand({ segments }: { segments: SkyPoint[][] }) {
+  if (segments.length === 0) return null
+  return (
+    <g style={{ mixBlendMode: 'screen' }}>
+      {segments.map((seg, i) => {
+        if (seg.length < 2) return null
+        const d = seg.map((p, j) => {
+          const [x, y] = projectPoint(p.r, p.theta)
+          return `${j === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
+        }).join(' ')
+        return (
+          <g key={i} fill="none" strokeLinecap="round">
+            <path d={d} stroke="#cfd8ff" strokeWidth={28} opacity={0.05} />
+            <path d={d} stroke="#cfd8ff" strokeWidth={15} opacity={0.07} />
+            <path d={d} stroke="#eef1ff" strokeWidth={6} opacity={0.08} />
+          </g>
+        )
+      })}
     </g>
   )
 }
@@ -303,7 +333,9 @@ function twinkleStyle(id: number): React.CSSProperties {
   return { animationDuration: `${duration}s`, animationDelay: `${delay}s` }
 }
 
-function RealisticStar({ cx, cy, mag, color, id, born }: { cx: number; cy: number; mag: number; color: string; id: number; born: boolean }) {
+function RealisticStar({
+  cx, cy, mag, color, id, born, selected,
+}: { cx: number; cy: number; mag: number; color: string; id: number; born: boolean; selected?: boolean }) {
   const scale = magToScale(mag) * starJitter(id)
   const gradId = `glow-${id}`
   const coreId = `glowcore-${id}`
@@ -318,40 +350,38 @@ function RealisticStar({ cx, cy, mag, color, id, born }: { cx: number; cy: numbe
       className={born ? 'star-born' : 'star-full'}
       style={born ? { transformOrigin: `${cx}px ${cy}px` } : { transformOrigin: `${cx}px ${cy}px`, ...twinkleStyle(id) }}
     >
-      <defs>
-        {/* Real per-star color (from the catalog's B-V index) shows in the
-            halo — the core stays white-hot regardless of a star's tint,
-            same as how a red giant still looks bright-white at its center
-            to the naked eye; the color only reads in the glow around it. */}
-        <radialGradient id={gradId} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor={color} stopOpacity="0.75" />
-          <stop offset="45%" stopColor={color} stopOpacity="0.22" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </radialGradient>
-        <radialGradient id={coreId} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="white" stopOpacity="1" />
-          <stop offset="60%" stopColor="white" stopOpacity="0.55" />
-          <stop offset="100%" stopColor="white" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      {showSpikes && (
-        <g opacity="0.7" stroke="white" strokeWidth={0.6}>
-          <line x1={cx - spikeLen} y1={cy} x2={cx + spikeLen} y2={cy} />
-          <line x1={cx} y1={cy - spikeLen} x2={cx} y2={cy + spikeLen} />
-        </g>
-      )}
-      <circle cx={cx} cy={cy} r={11 * scale} fill={`url(#${gradId})`} />
-      <circle cx={cx} cy={cy} r={5 * scale} fill={`url(#${coreId})`} />
-      <circle cx={cx} cy={cy} r={1.9 * scale} fill="white" />
+      {/* A tapped star expands slightly — a separate inner transform layered
+          under the twinkle/birth animation on the outer <g>, so the two
+          don't fight over the same CSS property. */}
+      <g style={{ transform: selected ? 'scale(1.22)' : 'scale(1)', transformOrigin: `${cx}px ${cy}px`, transition: 'transform 0.25s ease-out' }}>
+        <defs>
+          {/* Real per-star color (from the catalog's B-V index) shows in the
+              halo — the core stays white-hot regardless of a star's tint,
+              same as how a red giant still looks bright-white at its center
+              to the naked eye; the color only reads in the glow around it. */}
+          <radialGradient id={gradId} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={color} stopOpacity="0.75" />
+            <stop offset="45%" stopColor={color} stopOpacity="0.22" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </radialGradient>
+          <radialGradient id={coreId} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="white" stopOpacity="1" />
+            <stop offset="60%" stopColor="white" stopOpacity="0.55" />
+            <stop offset="100%" stopColor="white" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        {showSpikes && (
+          <g opacity="0.7" stroke="white" strokeWidth={0.6}>
+            <line x1={cx - spikeLen} y1={cy} x2={cx + spikeLen} y2={cy} />
+            <line x1={cx} y1={cy - spikeLen} x2={cx} y2={cy + spikeLen} />
+          </g>
+        )}
+        <circle cx={cx} cy={cy} r={11 * scale} fill={`url(#${gradId})`} />
+        <circle cx={cx} cy={cy} r={5 * scale} fill={`url(#${coreId})`} />
+        <circle cx={cx} cy={cy} r={1.9 * scale} fill="white" />
+      </g>
     </g>
   )
-}
-
-// A day's real star, not yet lit — a faint point marking where it is. The
-// real sky doesn't wait for you; the star is already there, just not
-// claimed yet.
-function UnlitPoint({ cx, cy }: { cx: number; cy: number }) {
-  return <circle cx={cx} cy={cy} r={1.4} fill="white" opacity="0.16" />
 }
 
 // ── Nova burst (birth flash, unchanged from the previous design) ───────────
@@ -433,10 +463,13 @@ function SkyCycleModal({
       <div className="w-full max-w-sm flex flex-col items-center gap-4 text-center" onClick={e => e.stopPropagation()}>
         <p className="font-sans text-xs uppercase tracking-widest text-white/50">Why this is your real sky</p>
         <p className="font-serif text-base text-white/90 leading-relaxed">
-          This is the real sky above {locationName} this cycle{conName ? `, near ${conName}` : ''} — {formatCycleMonth(cycleStart)}. Every 30 days you get a new patch of real sky to work with.
+          This is the real patch of sky directly above {locationName} this cycle{conName ? `, near ${conName}` : ''} — {formatCycleMonth(cycleStart)}, roughly everything within 40° of straight overhead, close to half the sky you'd actually see looking up. Every 30 days you get a new patch to build.
         </p>
         <p className="font-serif text-base text-white/90 leading-relaxed">
-          A star lights up on a day you show up for all three parts of yourself. Which ones light up is entirely yours — your location and your own pattern of showing up mean no one else will ever build this exact picture.
+          A star lights up on a day you show up for all three parts of yourself — over the month, you're building this sky one honest day at a time, not watching it happen to you.
+        </p>
+        <p className="font-serif text-base text-white/90 leading-relaxed">
+          Which stars light up is entirely yours. Your location and your own pattern of showing up mean no one else will ever build this exact picture — it's a real record of the work you put in.
         </p>
         <p className="font-serif text-base text-white/90 leading-relaxed">
           Nothing is ever lost. When a cycle ends, its sky settles into your archive exactly as you left it, and a new one begins.
@@ -475,27 +508,13 @@ function CycleSky({
   settling: boolean
   locationName: string
 }) {
-  const { stars, lines } = getSkyForCycle(lat, lon, cycleStart, UNIVERSE_CYCLE_DAYS, seed)
+  const { stars, lines, milkyWay } = getSkyForCycle(lat, lon, cycleStart, UNIVERSE_CYCLE_DAYS, seed)
   const dates = getCycleDates(cycleStart, UNIVERSE_CYCLE_DAYS)
   const containerRef = useRef<HTMLDivElement>(null)
   const downloadRef = useRef<HTMLAnchorElement>(null)
   const [hover, setHover] = useState<HoverInfo | null>(null)
   const [downloading, setDownloading] = useState(false)
   const uid = `${seed}-${cycleStart.getTime()}`
-
-  // Parallax tilt: drag/hover shifts perspective a few degrees, and the
-  // star layer shifts further than the background dust layer — a flat SVG
-  // reads as if it has real depth once near/far layers move at different
-  // rates, the same trick a photo-parallax card uses.
-  const [tilt, setTilt] = useState({ x: 0, y: 0 }) // -1..1 each axis
-  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    const rect = containerRef.current?.getBoundingClientRect()
-    if (!rect || rect.width === 0 || rect.height === 0) return
-    const px = (e.clientX - rect.left) / rect.width
-    const py = (e.clientY - rect.top) / rect.height
-    setTilt({ x: Math.max(-1, Math.min(1, px * 2 - 1)), y: Math.max(-1, Math.min(1, py * 2 - 1)) })
-  }
-  function resetTilt() { setTilt({ x: 0, y: 0 }) }
 
   const positions = new Map<number, [number, number]>()
   stars.forEach(s => positions.set(s.id, project(s)))
@@ -590,56 +609,52 @@ function CycleSky({
     }
   }
 
-  const tilting = tilt.x !== 0 || tilt.y !== 0
-
   return (
     <div className="flex flex-col gap-2">
-    <div
-      className="relative max-w-[460px] mx-auto w-full"
-      style={{ perspective: 700 }}
-      onClick={handlePanelTap}
-      onPointerMove={handlePointerMove}
-      onPointerLeave={resetTilt}
-    >
-      <div
-        ref={containerRef}
-        style={{
-          transform: `rotateX(${tilt.y * -6}deg) rotateY(${tilt.x * 6}deg)`,
-          transition: tilting ? 'transform 0.05s linear' : 'transform 0.6s ease-out',
-        }}
-      >
+    <div className="relative max-w-[460px] mx-auto w-full" onClick={handlePanelTap}>
+      <div ref={containerRef}>
         <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }} aria-hidden="true">
-          <SkyVignette w={SVG_W} h={SVG_H} uid={uid} />
-          <g style={{ transform: `translate(${tilt.x * -1.5}px, ${tilt.y * -1.5}px)`, transition: tilting ? undefined : 'transform 0.6s ease-out' }}>
+          <defs>
+            <clipPath id={`circle-clip-${uid}`}>
+              <circle cx={SVG_W / 2} cy={SVG_H / 2} r={CIRCLE_R} />
+            </clipPath>
+          </defs>
+          <g clipPath={`url(#circle-clip-${uid})`}>
+            <SkyVignette w={SVG_W} h={SVG_H} uid={uid} />
+            <MilkyWayBand segments={milkyWay} />
             <DustField w={SVG_W} h={SVG_H} seed="triova-cyclesky-dust" />
             <BackgroundStars w={SVG_W} h={SVG_H} seed="triova-cyclesky-bg" count={40} />
+
+            <g
+              className={settling ? 'universe-fade-out' : undefined}
+              pointerEvents={settling ? 'none' : undefined}
+            >
+              {/* Real constellation lines, only between stars actually lit */}
+              {lines.filter(([a, b]) => litStarIds.has(a) && litStarIds.has(b)).map(([a, b]) => {
+                const [x1, y1] = positions.get(a)!
+                const [x2, y2] = positions.get(b)!
+                return <line key={`${a}-${b}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="0.8" opacity="0.35" />
+              })}
+
+              {stars.map(star => {
+                if (!litStarIds.has(star.id)) return null
+                const [cx, cy] = positions.get(star.id)!
+                return (
+                  <RealisticStar
+                    key={star.id} cx={cx} cy={cy} mag={star.mag} color={star.color} id={star.id} born={false}
+                    selected={hover?.id === String(star.id)}
+                  />
+                )
+              })}
+            </g>
+
+            {settling && <SkySettleTransition w={SVG_W} h={SVG_H} />}
+
+            {activeNova && (
+              <NovaBurst key={`nova-${activeNova.dateStr}`} cx={activeNova.cx} cy={activeNova.cy}
+                onDone={() => setActiveNova(null)} />
+            )}
           </g>
-
-          <g
-            className={settling ? 'universe-fade-out' : undefined}
-            pointerEvents={settling ? 'none' : undefined}
-            style={{ transform: `translate(${tilt.x * -4}px, ${tilt.y * -4}px)`, transition: tilting ? undefined : 'transform 0.6s ease-out' }}
-          >
-            {/* Real constellation lines, only between stars actually lit */}
-            {lines.filter(([a, b]) => litStarIds.has(a) && litStarIds.has(b)).map(([a, b]) => {
-              const [x1, y1] = positions.get(a)!
-              const [x2, y2] = positions.get(b)!
-              return <line key={`${a}-${b}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="0.8" opacity="0.35" />
-            })}
-
-            {stars.map(star => {
-              const [cx, cy] = positions.get(star.id)!
-              if (!litStarIds.has(star.id)) return <UnlitPoint key={star.id} cx={cx} cy={cy} />
-              return <RealisticStar key={star.id} cx={cx} cy={cy} mag={star.mag} color={star.color} id={star.id} born={false} />
-            })}
-          </g>
-
-          {settling && <SkySettleTransition w={SVG_W} h={SVG_H} />}
-
-          {activeNova && (
-            <NovaBurst key={`nova-${activeNova.dateStr}`} cx={activeNova.cx} cy={activeNova.cy}
-              onDone={() => setActiveNova(null)} />
-          )}
         </svg>
       </div>
       {hover && <HoverCard {...hover} />}
@@ -673,7 +688,7 @@ function ArchiveThumb({
   seed: string
   onOpen: () => void
 }) {
-  const { stars, lines } = getSkyForCycle(lat, lon, cycleStart, UNIVERSE_CYCLE_DAYS, seed)
+  const { stars, lines, milkyWay } = getSkyForCycle(lat, lon, cycleStart, UNIVERSE_CYCLE_DAYS, seed)
   const dates = getCycleDates(cycleStart, UNIVERSE_CYCLE_DAYS)
   const positions = new Map<number, [number, number]>()
   stars.forEach(s => positions.set(s.id, project(s)))
@@ -690,19 +705,28 @@ function ArchiveThumb({
       onClick={onOpen}
       className="flex flex-col gap-1.5 text-left rounded-2xl p-2 transition-colors hover:bg-white/[0.03]"
     >
-      <div className="rounded-xl overflow-hidden" style={{ background: '#0f0f1a' }}>
+      <div style={{ background: 'transparent' }}>
         <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" aria-hidden="true">
-          <SkyVignette w={SVG_W} h={SVG_H} uid={`archive-${seed}-${cycleStart.getTime()}`} />
-          {lines.filter(([a, b]) => litStarIds.has(a) && litStarIds.has(b)).map(([a, b]) => {
-            const [x1, y1] = positions.get(a)!
-            const [x2, y2] = positions.get(b)!
-            return <line key={`${a}-${b}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="0.8" opacity="0.35" />
-          })}
-          {stars.map(star => {
-            const [cx, cy] = positions.get(star.id)!
-            if (!litStarIds.has(star.id)) return <UnlitPoint key={star.id} cx={cx} cy={cy} />
-            return <RealisticStar key={star.id} cx={cx} cy={cy} mag={star.mag} color={star.color} id={star.id + 100000} born={false} />
-          })}
+          <defs>
+            <clipPath id={`circle-clip-archive-${seed}-${cycleStart.getTime()}`}>
+              <circle cx={SVG_W / 2} cy={SVG_H / 2} r={CIRCLE_R} />
+            </clipPath>
+          </defs>
+          <g clipPath={`url(#circle-clip-archive-${seed}-${cycleStart.getTime()})`}>
+            <SkyVignette w={SVG_W} h={SVG_H} uid={`archive-${seed}-${cycleStart.getTime()}`} />
+            <MilkyWayBand segments={milkyWay} />
+            <DustField w={SVG_W} h={SVG_H} seed={`triova-archive-dust-${cycleStart.getTime()}`} />
+            {lines.filter(([a, b]) => litStarIds.has(a) && litStarIds.has(b)).map(([a, b]) => {
+              const [x1, y1] = positions.get(a)!
+              const [x2, y2] = positions.get(b)!
+              return <line key={`${a}-${b}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="0.8" opacity="0.35" />
+            })}
+            {stars.map(star => {
+              if (!litStarIds.has(star.id)) return null
+              const [cx, cy] = positions.get(star.id)!
+              return <RealisticStar key={star.id} cx={cx} cy={cy} mag={star.mag} color={star.color} id={star.id + 100000} born={false} />
+            })}
+          </g>
         </svg>
       </div>
       <p className="font-sans text-xs text-white/50 text-center">
