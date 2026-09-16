@@ -121,12 +121,40 @@ function dominantConstellation(stars: SkyStar[]): string | null {
 
 // ── Hover tooltip ───────────────────────────────────────────────────────────
 
-type HoverInfo = { x: number; y: number; title: string; subtitle: string; id?: string }
+type HoverInfo = {
+  x: number; y: number; title: string; subtitle: string; id?: string
+  colorName?: string; colorHex?: string; brightness?: string
+}
 
-function HoverCard({ x, y, title, subtitle }: HoverInfo) {
+// Real stars sit on a continuum from blue-white (hot) through white and
+// yellow to orange and red (cool) — bucketed here from the catalog's own
+// derived RGB so the tap card can name what the eye is actually seeing,
+// same physics the color itself already came from (see CLAUDE.md).
+function colorName(hex: string): string {
+  const n = parseInt(hex.slice(1), 16)
+  const r = (n >> 16) & 255, b = n & 255
+  const warmth = r - b // positive = warm (orange/red), negative = cool (blue)
+  if (warmth < -12) return 'Blue-white'
+  if (warmth < 6) return 'White'
+  if (warmth < 25) return 'Yellow-white'
+  if (warmth < 45) return 'Orange'
+  return 'Red'
+}
+
+// Naked-eye magnitude bands, brightest-first — mirrors how the star's size
+// on screen was already computed (magToScale), described in words.
+function magnitudeLabel(mag: number): string {
+  if (mag < 0) return 'Brilliant'
+  if (mag < 1) return 'Very bright'
+  if (mag < 2.5) return 'Bright'
+  if (mag < 4) return 'Moderate'
+  return 'Faint'
+}
+
+function HoverCard({ x, y, title, subtitle, colorName, colorHex, brightness }: HoverInfo) {
   return (
     <div
-      className="pointer-events-none absolute z-20 flex flex-col gap-0.5 px-3 py-2 rounded-xl"
+      className="pointer-events-none absolute z-20 flex flex-col gap-1 px-3 py-2 rounded-xl"
       style={{
         left: x,
         top: y,
@@ -140,6 +168,17 @@ function HoverCard({ x, y, title, subtitle }: HoverInfo) {
     >
       <span className="font-serif text-sm text-white whitespace-nowrap">{title}</span>
       <span className="font-sans text-[10px] uppercase tracking-widest text-white/50 whitespace-nowrap">{subtitle}</span>
+      {(colorName || brightness) && (
+        <span className="flex items-center gap-1.5 font-sans text-[10px] text-white/60 whitespace-nowrap">
+          {colorHex && (
+            <span
+              className="inline-block w-2 h-2 rounded-full shrink-0"
+              style={{ background: colorHex, boxShadow: `0 0 4px ${colorHex}` }}
+            />
+          )}
+          {colorName}{colorName && brightness ? ' · ' : ''}{brightness}
+        </span>
+      )}
     </div>
   )
 }
@@ -148,7 +187,7 @@ function HoverCard({ x, y, title, subtitle }: HoverInfo) {
 
 const SVG_W = 220
 const SVG_H = 200
-const PROJECT_RADIUS = 88 // px from panel center to the crop's outer edge
+const PROJECT_RADIUS = 80 // px from panel center to the crop's outer edge
 
 function project(star: SkyStar): [number, number] {
   const r = star.r * PROJECT_RADIUS
@@ -157,6 +196,26 @@ function project(star: SkyStar): [number, number] {
 
 // Faint decorative sprinkle behind a panel — pure atmosphere, not tied to
 // real star data, fixed seed so it doesn't reshuffle on re-render.
+// A flat single-color fill reads flat. Real astro shots have a soft radial
+// falloff (a touch lighter near the zenith crop's center, darker toward the
+// edges) — this alone does more for "does this look like a real sky" than
+// any per-star tweak.
+function SkyVignette({ w, h }: { w: number; h: number }) {
+  const id = 'sky-vignette'
+  return (
+    <>
+      <defs>
+        <radialGradient id={id} cx="50%" cy="42%" r="75%">
+          <stop offset="0%" stopColor="#1a1a30" />
+          <stop offset="55%" stopColor="#12121f" />
+          <stop offset="100%" stopColor="#08080f" />
+        </radialGradient>
+      </defs>
+      <rect x={0} y={0} width={w} height={h} fill={`url(#${id})`} />
+    </>
+  )
+}
+
 function BackgroundStars({ w, h, seed, count }: { w: number; h: number; seed: string; count: number }) {
   const rand = seededRand(strHash(seed))
   const stars = Array.from({ length: count }, () => ({
@@ -215,7 +274,18 @@ function DustField({ w, h, seed }: { w: number; h: number; seed: string }) {
 
 function magToScale(mag: number): number {
   const t = Math.max(0, Math.min(1, (6 - mag) / 7.5))
-  return 0.55 + t * 1.05
+  // Wider range than a flat linear scale, and eased with a square so the
+  // handful of genuinely bright stars stand out from the common faint
+  // majority — real skies read as a few dominant points, not a uniform field.
+  return 0.42 + t * t * 1.75
+}
+
+// Tiny per-star size/opacity jitter (seeded by id, not magnitude) — two
+// stars at the same real magnitude still shouldn't render pixel-identical;
+// atmosphere and a real sensor never draw two stars exactly alike.
+function starJitter(id: number): number {
+  const rand = seededRand(id * 7919 + 3)
+  return 0.92 + rand() * 0.16
 }
 
 // Twinkle timing varies per star (seeded by id) — a field of stars that all
@@ -230,9 +300,15 @@ function twinkleStyle(id: number): React.CSSProperties {
 }
 
 function RealisticStar({ cx, cy, mag, color, id, born }: { cx: number; cy: number; mag: number; color: string; id: number; born: boolean }) {
-  const scale = magToScale(mag)
+  const scale = magToScale(mag) * starJitter(id)
   const gradId = `glow-${id}`
   const coreId = `glowcore-${id}`
+  // Only the genuinely brightest stars get diffraction spikes — in a real
+  // long-exposure photo those thin crosses only show up on the handful of
+  // stars bright enough to saturate the sensor (Sirius, Vega, Rigel-class),
+  // not every point of light.
+  const showSpikes = mag < 1.6
+  const spikeLen = (showSpikes ? 15 : 0) * scale
   return (
     <g
       className={born ? 'star-born' : 'star-full'}
@@ -244,18 +320,25 @@ function RealisticStar({ cx, cy, mag, color, id, born }: { cx: number; cy: numbe
             same as how a red giant still looks bright-white at its center
             to the naked eye; the color only reads in the glow around it. */}
         <radialGradient id={gradId} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor={color} stopOpacity="0.9" />
-          <stop offset="40%" stopColor={color} stopOpacity="0.32" />
+          <stop offset="0%" stopColor={color} stopOpacity="0.75" />
+          <stop offset="45%" stopColor={color} stopOpacity="0.22" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </radialGradient>
         <radialGradient id={coreId} cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="white" stopOpacity="1" />
+          <stop offset="60%" stopColor="white" stopOpacity="0.55" />
           <stop offset="100%" stopColor="white" stopOpacity="0" />
         </radialGradient>
       </defs>
-      <circle cx={cx} cy={cy} r={14 * scale} fill={`url(#${gradId})`} />
-      <circle cx={cx} cy={cy} r={6 * scale} fill={`url(#${coreId})`} />
-      <circle cx={cx} cy={cy} r={2.6 * scale} fill="white" />
+      {showSpikes && (
+        <g opacity="0.7" stroke="white" strokeWidth={0.6}>
+          <line x1={cx - spikeLen} y1={cy} x2={cx + spikeLen} y2={cy} />
+          <line x1={cx} y1={cy - spikeLen} x2={cx} y2={cy + spikeLen} />
+        </g>
+      )}
+      <circle cx={cx} cy={cy} r={11 * scale} fill={`url(#${gradId})`} />
+      <circle cx={cx} cy={cy} r={5 * scale} fill={`url(#${coreId})`} />
+      <circle cx={cx} cy={cy} r={1.9 * scale} fill="white" />
     </g>
   )
 }
@@ -457,7 +540,10 @@ function CycleSky({
           const title = star.name ?? `A star in ${star.con ?? 'the sky'}`
           const dayIdx = dates.findIndex((_, i) => stars[i]?.id === star.id)
           const subtitle = dayIdx >= 0 ? formatDayLabel(dateKey(dates[dayIdx])) : ''
-          return { x: e.clientX - rect.left, y: e.clientY - rect.top, title, subtitle, id: String(star.id) }
+          return {
+            x: e.clientX - rect.left, y: e.clientY - rect.top, title, subtitle, id: String(star.id),
+            colorName: colorName(star.color), colorHex: star.color, brightness: magnitudeLabel(star.mag),
+          }
         })
         return
       }
@@ -487,9 +573,10 @@ function CycleSky({
 
   return (
     <div className="flex flex-col gap-2">
-    <div className="relative" onClick={handlePanelTap}>
+    <div className="relative max-w-[380px] mx-auto w-full" onClick={handlePanelTap}>
       <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0f0f1a' }}>
         <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }} aria-hidden="true">
+          <SkyVignette w={SVG_W} h={SVG_H} />
           <DustField w={SVG_W} h={SVG_H} seed="triova-cyclesky-dust" />
           <BackgroundStars w={SVG_W} h={SVG_H} seed="triova-cyclesky-bg" count={40} />
 
@@ -566,6 +653,7 @@ function ArchiveThumb({
     >
       <div className="rounded-xl overflow-hidden" style={{ background: '#0f0f1a' }}>
         <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" aria-hidden="true">
+          <SkyVignette w={SVG_W} h={SVG_H} />
           {lines.filter(([a, b]) => litStarIds.has(a) && litStarIds.has(b)).map(([a, b]) => {
             const [x1, y1] = positions.get(a)!
             const [x2, y2] = positions.get(b)!
