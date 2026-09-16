@@ -306,6 +306,21 @@ function MilkyWayBand({ segments }: { segments: SkyPoint[][] }) {
 // asteroids here (see CLAUDE.md: that flourish was flagged as decoration
 // disconnected from data in the app's own audit).
 
+// A real star's color (from its B-V index) is genuinely very close to
+// white — accurate, but reads as subtle on screen. Rather than scaling HSL
+// saturation (a pale color already measures near-maximum HSL saturation,
+// so that math is a no-op here), this pushes each channel further from
+// white in proportion to how far it already is — the same hue direction,
+// just a deeper, more visible version of it.
+function vividColor(hex: string): string {
+  const n = parseInt(hex.slice(1), 16)
+  const boost = (shift: number) => Math.max(0, Math.min(255, Math.round(255 - shift * 2)))
+  const r = boost(255 - ((n >> 16) & 255))
+  const g = boost(255 - ((n >> 8) & 255))
+  const b = boost(255 - (n & 255))
+  return `#${[r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')}`
+}
+
 function magToScale(mag: number): number {
   const t = Math.max(0, Math.min(1, (6 - mag) / 7.5))
   // Wider range than a flat linear scale, and eased with a square so the
@@ -337,6 +352,7 @@ function RealisticStar({
   cx, cy, mag, color, id, born, selected,
 }: { cx: number; cy: number; mag: number; color: string; id: number; born: boolean; selected?: boolean }) {
   const scale = magToScale(mag) * starJitter(id)
+  const glowColor = vividColor(color)
   const gradId = `glow-${id}`
   const coreId = `glowcore-${id}`
   // Only the genuinely brightest stars get diffraction spikes — in a real
@@ -360,9 +376,10 @@ function RealisticStar({
               same as how a red giant still looks bright-white at its center
               to the naked eye; the color only reads in the glow around it. */}
           <radialGradient id={gradId} cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={color} stopOpacity="0.75" />
-            <stop offset="45%" stopColor={color} stopOpacity="0.22" />
-            <stop offset="100%" stopColor={color} stopOpacity="0" />
+            <stop offset="0%" stopColor={glowColor} stopOpacity="1" />
+            <stop offset="35%" stopColor={glowColor} stopOpacity="0.55" />
+            <stop offset="70%" stopColor={glowColor} stopOpacity="0.16" />
+            <stop offset="100%" stopColor={glowColor} stopOpacity="0" />
           </radialGradient>
           <radialGradient id={coreId} cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="white" stopOpacity="1" />
@@ -376,7 +393,7 @@ function RealisticStar({
             <line x1={cx} y1={cy - spikeLen} x2={cx} y2={cy + spikeLen} />
           </g>
         )}
-        <circle cx={cx} cy={cy} r={11 * scale} fill={`url(#${gradId})`} />
+        <circle cx={cx} cy={cy} r={13 * scale} fill={`url(#${gradId})`} />
         <circle cx={cx} cy={cy} r={5 * scale} fill={`url(#${coreId})`} />
         <circle cx={cx} cy={cy} r={1.9 * scale} fill="white" />
       </g>
@@ -386,24 +403,62 @@ function RealisticStar({
 
 // ── Nova burst (birth flash, unchanged from the previous design) ───────────
 
-function NovaBurst({ cx, cy, onDone }: { cx: number; cy: number; onDone: () => void }) {
+// A tap's immediate feedback — a quick, small ring in the star's own real
+// color, distinct from the birth flash below (that one marks an earned
+// moment; this one is just "yes, that registered"). Purely tactile.
+function TapRipple({ cx, cy, color, onDone }: { cx: number; cy: number; color: string; onDone: () => void }) {
   useEffect(() => {
-    const t = setTimeout(onDone, 900)
+    const t = setTimeout(onDone, 480)
     return () => clearTimeout(t)
   }, [onDone])
   return (
+    <g pointerEvents="none">
+      <circle cx={cx} cy={cy} r={2} fill="none" stroke={color} strokeWidth={1.5} opacity="0.85">
+        <animate attributeName="r" from="2" to="24" dur="0.48s" fill="freeze" />
+        <animate attributeName="opacity" from="0.85" to="0" dur="0.48s" fill="freeze" />
+      </circle>
+      <circle cx={cx} cy={cy} r={0} fill="white" opacity="0.5">
+        <animate attributeName="r" from="0" to="8" dur="0.2s" fill="freeze" />
+        <animate attributeName="opacity" from="0.5" to="0" dur="0.3s" fill="freeze" />
+      </circle>
+    </g>
+  )
+}
+
+// The birth flash — the one moment on this screen tied to something you
+// actually earned (a day you aligned all three parts of yourself), so it's
+// the biggest, most deliberate payoff here. Uses the star's own real color
+// rather than fixed category colors, so the moment feels specific to that
+// exact star, not generic.
+function NovaBurst({ cx, cy, color, onDone }: { cx: number; cy: number; color: string; onDone: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 1400)
+    return () => clearTimeout(t)
+  }, [onDone])
+  const glow = vividColor(color)
+  return (
     <g>
-      <circle cx={cx} cy={cy} r={0} fill="white" opacity="0.95">
-        <animate attributeName="r" from="0" to="70" dur="0.5s" fill="freeze" />
-        <animate attributeName="opacity" from="0.95" to="0" dur="0.5s" fill="freeze" />
+      {/* A soft wide bloom behind everything else, the "big" part of the payoff */}
+      <circle cx={cx} cy={cy} r={0} fill={glow} opacity="0.5">
+        <animate attributeName="r" from="0" to="130" dur="1.1s" fill="freeze" />
+        <animate attributeName="opacity" from="0.5" to="0" dur="1.1s" fill="freeze" />
       </circle>
-      <circle cx={cx} cy={cy} r={0} fill="none" stroke="#1D9E75" strokeWidth="2">
-        <animate attributeName="r" from="0" to="45" dur="0.7s" fill="freeze" />
-        <animate attributeName="opacity" from="0.8" to="0" dur="0.7s" fill="freeze" />
+      <circle cx={cx} cy={cy} r={0} fill="white" opacity="1">
+        <animate attributeName="r" from="0" to="95" dur="0.6s" fill="freeze" />
+        <animate attributeName="opacity" from="1" to="0" dur="0.6s" fill="freeze" />
       </circle>
-      <circle cx={cx} cy={cy} r={0} fill="none" stroke="#7F77DD" strokeWidth="1.5">
-        <animate attributeName="r" from="0" to="58" dur="0.85s" fill="freeze" />
-        <animate attributeName="opacity" from="0.5" to="0" dur="0.85s" fill="freeze" />
+      <circle cx={cx} cy={cy} r={0} fill="none" stroke={glow} strokeWidth="2.5">
+        <animate attributeName="r" from="0" to="60" dur="0.85s" fill="freeze" />
+        <animate attributeName="opacity" from="0.9" to="0" dur="0.85s" fill="freeze" />
+      </circle>
+      <circle cx={cx} cy={cy} r={0} fill="none" stroke="white" strokeWidth="1.5">
+        <animate attributeName="r" from="0" to="78" dur="1.05s" fill="freeze" />
+        <animate attributeName="opacity" from="0.6" to="0" dur="1.05s" fill="freeze" />
+      </circle>
+      {/* A slower final ring, so the moment lingers a beat longer than a single quick flash */}
+      <circle cx={cx} cy={cy} r={0} fill="none" stroke={glow} strokeWidth="1">
+        <animate attributeName="r" from="0" to="105" dur="1.4s" fill="freeze" />
+        <animate attributeName="opacity" from="0.4" to="0" dur="1.4s" fill="freeze" />
       </circle>
     </g>
   )
@@ -489,7 +544,7 @@ function SkyCycleModal({
 
 // ── The live (or, mid-transition, settling) cycle sky ───────────────────────
 
-type BornDay = { dateStr: string; cx: number; cy: number }
+type BornDay = { dateStr: string; cx: number; cy: number; color: string }
 
 function CycleSky({
   cycleStart,
@@ -521,6 +576,8 @@ function CycleSky({
 
   const [novaQueue, setNovaQueue] = useState<BornDay[]>([])
   const [activeNova, setActiveNova] = useState<BornDay | null>(null)
+  const [ripple, setRipple] = useState<{ key: number; cx: number; cy: number; color: string } | null>(null)
+  const rippleKeyRef = useRef(0)
   const [seenBorn, setSeenBorn] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem('triova-born') ?? '[]')) }
     catch { return new Set() }
@@ -536,7 +593,7 @@ function CycleSky({
       if (!star) return
       if (getWins(days, dk) === 3 && !newSeenBorn.has(dk)) {
         const pos = positions.get(star.id)
-        if (pos) { toBorn.push({ dateStr: dk, cx: pos[0], cy: pos[1] }); newSeenBorn.add(dk) }
+        if (pos) { toBorn.push({ dateStr: dk, cx: pos[0], cy: pos[1], color: star.color }); newSeenBorn.add(dk) }
       }
     })
     if (toBorn.length > 0) {
@@ -573,6 +630,9 @@ function CycleSky({
       if (!litStarIds.has(star.id)) continue
       const [sx, sy] = positions.get(star.id)!
       if (Math.hypot(sx - tapX, sy - tapY) <= 20) {
+        if (typeof navigator.vibrate === 'function') navigator.vibrate(8)
+        rippleKeyRef.current += 1
+        setRipple({ key: rippleKeyRef.current, cx: sx, cy: sy, color: vividColor(star.color) })
         setHover(prev => {
           if (prev?.id === String(star.id)) return null
           const title = star.name ?? `A star in ${star.con ?? 'the sky'}`
@@ -611,7 +671,7 @@ function CycleSky({
 
   return (
     <div className="flex flex-col gap-2">
-    <div className="relative max-w-[460px] mx-auto w-full" onClick={handlePanelTap}>
+    <div className="relative max-w-[620px] mx-auto w-full" onClick={handlePanelTap}>
       <div ref={containerRef}>
         <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }} aria-hidden="true">
           <defs>
@@ -651,8 +711,13 @@ function CycleSky({
             {settling && <SkySettleTransition w={SVG_W} h={SVG_H} />}
 
             {activeNova && (
-              <NovaBurst key={`nova-${activeNova.dateStr}`} cx={activeNova.cx} cy={activeNova.cy}
+              <NovaBurst key={`nova-${activeNova.dateStr}`} cx={activeNova.cx} cy={activeNova.cy} color={activeNova.color}
                 onDone={() => setActiveNova(null)} />
+            )}
+
+            {ripple && (
+              <TapRipple key={ripple.key} cx={ripple.cx} cy={ripple.cy} color={ripple.color}
+                onDone={() => setRipple(null)} />
             )}
           </g>
         </svg>
