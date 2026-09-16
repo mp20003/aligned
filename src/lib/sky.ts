@@ -18,6 +18,7 @@ export type CatalogStar = {
   dec: number // degrees
   mag: number
   con: string | null
+  color: string // real color, derived from the star's B-V index at prep time
 }
 
 const STARS = starsRaw as CatalogStar[]
@@ -33,6 +34,7 @@ export type SkyStar = {
   name: string | null
   mag: number
   con: string | null
+  color: string
   r: number
   theta: number
 }
@@ -140,6 +142,7 @@ export function getSkyForCycle(
     name: star.name,
     mag: star.mag,
     con: star.con,
+    color: star.color,
     r: (90 - alt) / CROP_RADIUS_DEG,
     theta: toRad(az),
   }))

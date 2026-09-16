@@ -22,6 +22,7 @@ import { Link } from 'react-router'
 import { useApp } from '../context/AppContext'
 import { dateKey, getUniverseCycle, UNIVERSE_CYCLE_DAYS } from '../lib/date'
 import { getSkyForCycle, type SkyStar } from '../lib/sky'
+import { generateSkyPoster } from '../lib/skyPoster'
 import type { CategoryKey } from '../types'
 
 const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
@@ -78,6 +79,46 @@ function formatResetLabel(daysLeft: number): string {
   return `Resets in ${daysLeft} days`
 }
 
+// Standard IAU 3-letter constellation abbreviations, as used in the star
+// catalog's `con` field — full names for display.
+const CON_NAMES: Record<string, string> = {
+  And: 'Andromeda', Ant: 'Antlia', Aps: 'Apus', Aqr: 'Aquarius', Aql: 'Aquila',
+  Ara: 'Ara', Ari: 'Aries', Aur: 'Auriga', Boo: 'Boötes', Cae: 'Caelum',
+  Cam: 'Camelopardalis', Cnc: 'Cancer', CVn: 'Canes Venatici', CMa: 'Canis Major',
+  CMi: 'Canis Minor', Cap: 'Capricornus', Car: 'Carina', Cas: 'Cassiopeia',
+  Cen: 'Centaurus', Cep: 'Cepheus', Cet: 'Cetus', Cha: 'Chamaeleon', Cir: 'Circinus',
+  Col: 'Columba', Com: 'Coma Berenices', CrA: 'Corona Australis', CrB: 'Corona Borealis',
+  Crv: 'Corvus', Crt: 'Crater', Cru: 'Crux', Cyg: 'Cygnus', Del: 'Delphinus',
+  Dor: 'Dorado', Dra: 'Draco', Equ: 'Equuleus', Eri: 'Eridanus', For: 'Fornax',
+  Gem: 'Gemini', Gru: 'Grus', Her: 'Hercules', Hor: 'Horologium', Hya: 'Hydra',
+  Hyi: 'Hydrus', Ind: 'Indus', Lac: 'Lacerta', Leo: 'Leo', LMi: 'Leo Minor',
+  Lep: 'Lepus', Lib: 'Libra', Lup: 'Lupus', Lyn: 'Lynx', Lyr: 'Lyra', Men: 'Mensa',
+  Mic: 'Microscopium', Mon: 'Monoceros', Mus: 'Musca', Nor: 'Norma', Oct: 'Octans',
+  Oph: 'Ophiuchus', Ori: 'Orion', Pav: 'Pavo', Peg: 'Pegasus', Per: 'Perseus',
+  Phe: 'Phoenix', Pic: 'Pictor', Psc: 'Pisces', PsA: 'Piscis Austrinus', Pup: 'Puppis',
+  Pyx: 'Pyxis', Ret: 'Reticulum', Sge: 'Sagitta', Sgr: 'Sagittarius', Sco: 'Scorpius',
+  Scl: 'Sculptor', Sct: 'Scutum', Ser: 'Serpens', Sex: 'Sextans', Tau: 'Taurus',
+  Tel: 'Telescopium', Tri: 'Triangulum', TrA: 'Triangulum Australe', Tuc: 'Tucana',
+  UMa: 'Ursa Major', UMi: 'Ursa Minor', Vel: 'Vela', Vir: 'Virgo', Vol: 'Volans',
+  Vul: 'Vulpecula',
+}
+
+// The constellation most of this cycle's crop falls within — used to tell
+// the user roughly what they're looking at, not just an abstract star field.
+function dominantConstellation(stars: SkyStar[]): string | null {
+  const counts = new Map<string, number>()
+  for (const s of stars) {
+    if (!s.con) continue
+    counts.set(s.con, (counts.get(s.con) ?? 0) + 1)
+  }
+  let best: string | null = null
+  let bestCount = 0
+  for (const [con, count] of counts) {
+    if (count > bestCount) { best = con; bestCount = count }
+  }
+  return best ? (CON_NAMES[best] ?? best) : null
+}
+
 // ── Hover tooltip ───────────────────────────────────────────────────────────
 
 type HoverInfo = { x: number; y: number; title: string; subtitle: string; id?: string }
@@ -130,6 +171,42 @@ function BackgroundStars({ w, h, seed, count }: { w: number; h: number; seed: st
   )
 }
 
+// Soft colored dust — nebula blobs plus fine coloured specks, using the
+// app's own category palette (plus a couple of neutral space tones) so the
+// live sky reads as richer without inventing meaning that isn't there —
+// pure atmosphere, fixed seed, doesn't reshuffle on re-render.
+const DUST_COLORS = ['#1D9E75', '#7F77DD', '#D85A30', '#6FA8FF'] as const
+
+function DustField({ w, h, seed }: { w: number; h: number; seed: string }) {
+  const rand = seededRand(strHash(seed))
+  const blobs = Array.from({ length: 4 }, () => ({
+    cx: rand() * w, cy: rand() * h,
+    r: 30 + rand() * 45,
+    color: DUST_COLORS[Math.floor(rand() * DUST_COLORS.length)],
+    opacity: 0.05 + rand() * 0.07,
+  }))
+  const specks = Array.from({ length: 70 }, () => ({
+    x: rand() * w, y: rand() * h,
+    r: 0.4 + rand() * 0.9,
+    color: DUST_COLORS[Math.floor(rand() * DUST_COLORS.length)],
+    opacity: 0.08 + rand() * 0.16,
+  }))
+  return (
+    <g>
+      <defs>
+        {blobs.map((b, i) => (
+          <radialGradient key={i} id={`dust-blob-${seed}-${i}`} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={b.color} stopOpacity={b.opacity} />
+            <stop offset="100%" stopColor={b.color} stopOpacity="0" />
+          </radialGradient>
+        ))}
+      </defs>
+      {blobs.map((b, i) => <circle key={i} cx={b.cx} cy={b.cy} r={b.r} fill={`url(#dust-blob-${seed}-${i})`} />)}
+      {specks.map((s, i) => <circle key={i} cx={s.x} cy={s.y} r={s.r} fill={s.color} opacity={s.opacity} />)}
+    </g>
+  )
+}
+
 // ── A single real star ──────────────────────────────────────────────────────
 // Size comes from real magnitude (brighter = bigger), not decoration — a
 // star's visual weight always means something real. No planets/moons/
@@ -141,17 +218,35 @@ function magToScale(mag: number): number {
   return 0.55 + t * 1.05
 }
 
-function RealisticStar({ cx, cy, mag, id, born }: { cx: number; cy: number; mag: number; id: number; born: boolean }) {
+// Twinkle timing varies per star (seeded by id) — a field of stars that all
+// pulse in lockstep reads as artificial; staggered durations/delays read as
+// alive. Set via inline style (which wins over the shared CSS class's
+// shorthand `animation`) so star-twinkle's keyframes still apply.
+function twinkleStyle(id: number): React.CSSProperties {
+  const rand = seededRand(id)
+  const duration = 2.6 + rand() * 2.8 // 2.6s - 5.4s
+  const delay = -rand() * duration // negative delay = starts partway in, so nothing looks freshly-reset on mount
+  return { animationDuration: `${duration}s`, animationDelay: `${delay}s` }
+}
+
+function RealisticStar({ cx, cy, mag, color, id, born }: { cx: number; cy: number; mag: number; color: string; id: number; born: boolean }) {
   const scale = magToScale(mag)
   const gradId = `glow-${id}`
   const coreId = `glowcore-${id}`
   return (
-    <g className={born ? 'star-born' : 'star-full'} style={{ transformOrigin: `${cx}px ${cy}px` }}>
+    <g
+      className={born ? 'star-born' : 'star-full'}
+      style={born ? { transformOrigin: `${cx}px ${cy}px` } : { transformOrigin: `${cx}px ${cy}px`, ...twinkleStyle(id) }}
+    >
       <defs>
+        {/* Real per-star color (from the catalog's B-V index) shows in the
+            halo — the core stays white-hot regardless of a star's tint,
+            same as how a red giant still looks bright-white at its center
+            to the naked eye; the color only reads in the glow around it. */}
         <radialGradient id={gradId} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#fff" stopOpacity="0.85" />
-          <stop offset="35%" stopColor="#fff" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+          <stop offset="0%" stopColor={color} stopOpacity="0.9" />
+          <stop offset="40%" stopColor={color} stopOpacity="0.32" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
         </radialGradient>
         <radialGradient id={coreId} cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="white" stopOpacity="1" />
@@ -233,7 +328,15 @@ function SkySettleTransition({ w, h }: { w: number; h: number }) {
 // Explains the cycle in the app's own identity/metaphor voice, and — just as
 // importantly — reassures the user nothing is actually deleted, since a real
 // sky settling away could otherwise read as data loss.
-function SkyCycleModal({ cycleEnd, onClose }: { cycleEnd: Date; onClose: () => void }) {
+function SkyCycleModal({
+  cycleEnd, cycleStart, locationName, conName, onClose,
+}: {
+  cycleEnd: Date
+  cycleStart: Date
+  locationName: string
+  conName: string | null
+  onClose: () => void
+}) {
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center px-6 py-12 overflow-y-auto"
@@ -243,10 +346,10 @@ function SkyCycleModal({ cycleEnd, onClose }: { cycleEnd: Date; onClose: () => v
       <div className="w-full max-w-sm flex flex-col items-center gap-4 text-center" onClick={e => e.stopPropagation()}>
         <p className="font-sans text-xs uppercase tracking-widest text-white/50">Why this is your real sky</p>
         <p className="font-serif text-base text-white/90 leading-relaxed">
-          These are real stars, positioned exactly as they appear above you. Every 30 days you get a new patch of real sky to work with.
+          This is the real sky above {locationName} this cycle{conName ? `, near ${conName}` : ''} — {formatCycleMonth(cycleStart)}. Every 30 days you get a new patch of real sky to work with.
         </p>
         <p className="font-serif text-base text-white/90 leading-relaxed">
-          A star lights up on a day you show up for all three parts of yourself. Which ones light up is entirely yours — no one else will ever build this same picture.
+          A star lights up on a day you show up for all three parts of yourself. Which ones light up is entirely yours — your location and your own pattern of showing up mean no one else will ever build this exact picture.
         </p>
         <p className="font-serif text-base text-white/90 leading-relaxed">
           Nothing is ever lost. When a cycle ends, its sky settles into your archive exactly as you left it, and a new one begins.
@@ -275,6 +378,7 @@ function CycleSky({
   lon,
   seed,
   settling,
+  locationName,
 }: {
   cycleStart: Date
   days: DaysMap
@@ -282,11 +386,14 @@ function CycleSky({
   lon: number
   seed: string
   settling: boolean
+  locationName: string
 }) {
   const { stars, lines } = getSkyForCycle(lat, lon, cycleStart, UNIVERSE_CYCLE_DAYS, seed)
   const dates = getCycleDates(cycleStart, UNIVERSE_CYCLE_DAYS)
   const containerRef = useRef<HTMLDivElement>(null)
+  const downloadRef = useRef<HTMLAnchorElement>(null)
   const [hover, setHover] = useState<HoverInfo | null>(null)
+  const [downloading, setDownloading] = useState(false)
 
   const positions = new Map<number, [number, number]>()
   stars.forEach(s => positions.set(s.id, project(s)))
@@ -358,10 +465,32 @@ function CycleSky({
     setHover(null)
   }
 
+  async function handleDownload() {
+    setDownloading(true)
+    try {
+      const dataUrl = await generateSkyPoster({
+        stars, lines, litStarIds,
+        locationName,
+        conName: dominantConstellation(stars),
+        monthLabel: formatCycleMonth(cycleStart),
+        litCount: litStarIds.size,
+        totalDays: UNIVERSE_CYCLE_DAYS,
+      })
+      const a = downloadRef.current!
+      a.href = dataUrl
+      a.download = `triova-sky-${dateKey(cycleStart)}.png`
+      a.click()
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   return (
+    <div className="flex flex-col gap-2">
     <div className="relative" onClick={handlePanelTap}>
       <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0f0f1a' }}>
         <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }} aria-hidden="true">
+          <DustField w={SVG_W} h={SVG_H} seed="triova-cyclesky-dust" />
           <BackgroundStars w={SVG_W} h={SVG_H} seed="triova-cyclesky-bg" count={40} />
 
           <g className={settling ? 'universe-fade-out' : undefined} pointerEvents={settling ? 'none' : undefined}>
@@ -369,13 +498,13 @@ function CycleSky({
             {lines.filter(([a, b]) => litStarIds.has(a) && litStarIds.has(b)).map(([a, b]) => {
               const [x1, y1] = positions.get(a)!
               const [x2, y2] = positions.get(b)!
-              return <line key={`${a}-${b}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="0.5" opacity="0.18" />
+              return <line key={`${a}-${b}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="0.8" opacity="0.35" />
             })}
 
             {stars.map(star => {
               const [cx, cy] = positions.get(star.id)!
               if (!litStarIds.has(star.id)) return <UnlitPoint key={star.id} cx={cx} cy={cy} />
-              return <RealisticStar key={star.id} cx={cx} cy={cy} mag={star.mag} id={star.id} born={false} />
+              return <RealisticStar key={star.id} cx={cx} cy={cy} mag={star.mag} color={star.color} id={star.id} born={false} />
             })}
           </g>
 
@@ -388,6 +517,20 @@ function CycleSky({
         </svg>
       </div>
       {hover && <HoverCard {...hover} />}
+    </div>
+    {!settling && (
+      <>
+        <a ref={downloadRef} className="hidden" aria-hidden="true">download</a>
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={downloading}
+          className="self-center font-sans text-xs text-white/50 hover:text-white/80 transition-colors underline underline-offset-4 disabled:opacity-50"
+        >
+          {downloading ? 'Preparing…' : 'Download poster'}
+        </button>
+      </>
+    )}
     </div>
   )
 }
@@ -426,12 +569,12 @@ function ArchiveThumb({
           {lines.filter(([a, b]) => litStarIds.has(a) && litStarIds.has(b)).map(([a, b]) => {
             const [x1, y1] = positions.get(a)!
             const [x2, y2] = positions.get(b)!
-            return <line key={`${a}-${b}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="0.5" opacity="0.18" />
+            return <line key={`${a}-${b}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="0.8" opacity="0.35" />
           })}
           {stars.map(star => {
             const [cx, cy] = positions.get(star.id)!
             if (!litStarIds.has(star.id)) return <UnlitPoint key={star.id} cx={cx} cy={cy} />
-            return <RealisticStar key={star.id} cx={cx} cy={cy} mag={star.mag} id={star.id + 100000} born={false} />
+            return <RealisticStar key={star.id} cx={cx} cy={cy} mag={star.mag} color={star.color} id={star.id + 100000} born={false} />
           })}
         </svg>
       </div>
@@ -443,13 +586,14 @@ function ArchiveThumb({
 }
 
 function ExpandedSkyModal({
-  cycleStart, days, lat, lon, seed, onClose,
+  cycleStart, days, lat, lon, seed, locationName, onClose,
 }: {
   cycleStart: Date
   days: DaysMap
   lat: number
   lon: number
   seed: string
+  locationName: string
   onClose: () => void
 }) {
   // Same stacking-context reasoning as the rest of this screen's overlays —
@@ -474,7 +618,7 @@ function ExpandedSkyModal({
             Back
           </button>
         </div>
-        <CycleSky cycleStart={cycleStart} days={days} lat={lat} lon={lon} seed={seed} settling={false} />
+        <CycleSky cycleStart={cycleStart} days={days} lat={lat} lon={lon} seed={seed} settling={false} locationName={locationName} />
       </div>
     </div>,
     document.body
@@ -508,6 +652,7 @@ export default function Score() {
   const cycle = getUniverseCycle(accountCreated, new Date())
   const seed = session?.user.id ?? 'anon'
   const [showCycleInfo, setShowCycleInfo] = useState(false)
+  const [showArchive, setShowArchive] = useState(false)
 
   const [seenCycle, setSeenCycle] = useState<number | null>(() => {
     const raw = localStorage.getItem('triova-universe-cycle-seen')
@@ -546,14 +691,27 @@ export default function Score() {
   }
   archiveCycles.reverse() // most recent first
 
+  // Just for the "what am I looking at" caption below — CycleSky computes
+  // its own copy of this internally for rendering.
+  const { stars: displayedStars } = getSkyForCycle(location.lat, location.lon, displayedCycleStart, UNIVERSE_CYCLE_DAYS, seed)
+  const conName = dominantConstellation(displayedStars)
+  const displayedLitCount = settling ? 0 : getCycleDates(displayedCycleStart, UNIVERSE_CYCLE_DAYS)
+    .filter(d => getWins(data.days, dateKey(d)) === 3).length
+
   return (
     <div className="min-h-screen max-w-md lg:max-w-6xl mx-auto px-6 lg:px-10 pt-12 lg:pt-16 pb-28 flex flex-col gap-10"
       style={{ background: '#0f0f1a' }}>
 
-      {showCycleInfo && <SkyCycleModal cycleEnd={cycle.end} onClose={() => setShowCycleInfo(false)} />}
+      {showCycleInfo && (
+        <SkyCycleModal
+          cycleEnd={cycle.end} cycleStart={displayedCycleStart} locationName={location.name} conName={conName}
+          onClose={() => setShowCycleInfo(false)}
+        />
+      )}
       {expandedCycle && (
         <ExpandedSkyModal
           cycleStart={expandedCycle} days={data.days} lat={location.lat} lon={location.lon} seed={seed}
+          locationName={location.name}
           onClose={() => setExpandedCycle(null)}
         />
       )}
@@ -563,49 +721,62 @@ export default function Score() {
         <p className="font-sans text-xs uppercase tracking-widest font-semibold text-white/50">Triova</p>
         <h1 className="font-serif font-semibold text-2xl lg:text-4xl text-white">Your Sky</h1>
         <p className="font-sans text-xs text-white/50 leading-relaxed mt-1">
-          Real stars, above {location.name}. Every aligned day claims one.
+          {settling
+            ? `Real stars, above ${location.name}. Every aligned day claims one.`
+            : `You've shown up ${displayedLitCount} of ${UNIVERSE_CYCLE_DAYS} days this cycle — that's ${displayedLitCount} real star${displayedLitCount === 1 ? '' : 's'}, and no one else's.`}
         </p>
       </div>
 
-      <div className="flex flex-col gap-10 lg:grid lg:grid-cols-2 lg:gap-10 lg:items-stretch">
-        {/* Live sky */}
-        <div className="flex flex-col gap-3 lg:h-full">
-          <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
-            <p className="font-sans text-xs uppercase tracking-widest font-medium text-white/50">
-              This cycle
-            </p>
+      {/* Live sky — full width, so the archive doesn't compete for space
+          until someone actually asks to see it. */}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="font-sans text-xs uppercase tracking-widest font-medium text-white/50">
+            This cycle
+          </p>
+          <div className="flex items-center gap-4">
             <button
               onClick={() => setShowCycleInfo(true)}
               className="font-sans text-xs font-medium text-white/50 hover:text-white/80 transition-colors underline underline-offset-4"
             >
               {formatResetLabel(daysLeft)}
             </button>
+            <button
+              onClick={() => setShowArchive(v => !v)}
+              className="font-sans text-xs font-medium text-white/50 hover:text-white/80 transition-colors underline underline-offset-4"
+            >
+              {showArchive ? 'Hide archive' : 'Archive'}
+            </button>
           </div>
-
-          <CycleSky
-            cycleStart={displayedCycleStart} days={data.days} lat={location.lat} lon={location.lon}
-            seed={seed} settling={settling}
-          />
-
-          <div className="hidden lg:block flex-1" />
-
-          <p className="font-serif text-sm text-white/50 italic text-center">
-            {settling
-              ? 'Your sky is settling into your archive, and a new one is beginning.'
-              : 'Each star is real — it lights up the day you align all three practices at once.'}
-          </p>
         </div>
 
-        {/* Archive */}
-        <div className="flex flex-col gap-3 lg:h-full">
+        <CycleSky
+          cycleStart={displayedCycleStart} days={data.days} lat={location.lat} lon={location.lon}
+          seed={seed} settling={settling} locationName={location.name}
+        />
+
+        <p className="font-sans text-xs text-white/50 text-center">
+          {conName ? `Near ${conName}` : 'A patch of real sky'} · {formatCycleMonth(displayedCycleStart)}
+        </p>
+
+        <p className="font-serif text-sm text-white/50 italic text-center">
+          {settling
+            ? 'Your sky is settling into your archive, and a new one is beginning.'
+            : 'Each star is real — it lights up the day you align all three practices at once. Nobody else will ever build this exact picture.'}
+        </p>
+      </div>
+
+      {/* Archive — collapsed until asked for */}
+      {showArchive && (
+        <div className="flex flex-col gap-3">
           <p className="font-sans text-xs uppercase tracking-widest font-medium text-white/50">Your archive</p>
           {archiveCycles.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center rounded-2xl px-6 py-10 text-center"
+            <div className="flex items-center justify-center rounded-2xl px-6 py-10 text-center"
               style={{ background: '#0f0f1a' }}>
               <p className="font-sans text-sm text-white/40">Your first finished sky will appear here.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
               {archiveCycles.map(cs => (
                 <ArchiveThumb
                   key={cs.getTime()} cycleStart={cs} days={data.days} lat={location.lat} lon={location.lon}
@@ -614,12 +785,11 @@ export default function Score() {
               ))}
             </div>
           )}
-          <div className="hidden lg:block flex-1" />
           <p className="font-serif text-sm text-white/50 italic text-center">
             One real sky per finished cycle — nobody else will ever build the same one.
           </p>
         </div>
-      </div>
+      )}
     </div>
   )
 }
