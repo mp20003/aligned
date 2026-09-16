@@ -187,7 +187,7 @@ function HoverCard({ x, y, title, subtitle, colorName, colorHex, brightness }: H
 
 const SVG_W = 220
 const SVG_H = 200
-const PROJECT_RADIUS = 80 // px from panel center to the crop's outer edge
+const PROJECT_RADIUS = 86 // px from panel center to the crop's outer edge
 
 function project(star: SkyStar): [number, number] {
   const r = star.r * PROJECT_RADIUS
@@ -200,15 +200,19 @@ function project(star: SkyStar): [number, number] {
 // falloff (a touch lighter near the zenith crop's center, darker toward the
 // edges) — this alone does more for "does this look like a real sky" than
 // any per-star tweak.
-function SkyVignette({ w, h }: { w: number; h: number }) {
-  const id = 'sky-vignette'
+// Fades to fully transparent at the edge (not a darker solid color) so the
+// panel has no visible boundary against the page's own identical background
+// — a rectangle only becomes visible when its edge color doesn't match what
+// sits behind it, and the previous version's edge was darker than the page.
+function SkyVignette({ w, h, uid }: { w: number; h: number; uid: string }) {
+  const id = `sky-vignette-${uid}`
   return (
     <>
       <defs>
-        <radialGradient id={id} cx="50%" cy="42%" r="75%">
-          <stop offset="0%" stopColor="#1a1a30" />
-          <stop offset="55%" stopColor="#12121f" />
-          <stop offset="100%" stopColor="#08080f" />
+        <radialGradient id={id} cx="50%" cy="42%" r="70%">
+          <stop offset="0%" stopColor="#1e1e38" stopOpacity="1" />
+          <stop offset="45%" stopColor="#14141f" stopOpacity="0.7" />
+          <stop offset="100%" stopColor="#14141f" stopOpacity="0" />
         </radialGradient>
       </defs>
       <rect x={0} y={0} width={w} height={h} fill={`url(#${id})`} />
@@ -477,6 +481,21 @@ function CycleSky({
   const downloadRef = useRef<HTMLAnchorElement>(null)
   const [hover, setHover] = useState<HoverInfo | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const uid = `${seed}-${cycleStart.getTime()}`
+
+  // Parallax tilt: drag/hover shifts perspective a few degrees, and the
+  // star layer shifts further than the background dust layer — a flat SVG
+  // reads as if it has real depth once near/far layers move at different
+  // rates, the same trick a photo-parallax card uses.
+  const [tilt, setTilt] = useState({ x: 0, y: 0 }) // -1..1 each axis
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect || rect.width === 0 || rect.height === 0) return
+    const px = (e.clientX - rect.left) / rect.width
+    const py = (e.clientY - rect.top) / rect.height
+    setTilt({ x: Math.max(-1, Math.min(1, px * 2 - 1)), y: Math.max(-1, Math.min(1, py * 2 - 1)) })
+  }
+  function resetTilt() { setTilt({ x: 0, y: 0 }) }
 
   const positions = new Map<number, [number, number]>()
   stars.forEach(s => positions.set(s.id, project(s)))
@@ -571,16 +590,36 @@ function CycleSky({
     }
   }
 
+  const tilting = tilt.x !== 0 || tilt.y !== 0
+
   return (
     <div className="flex flex-col gap-2">
-    <div className="relative max-w-[380px] mx-auto w-full" onClick={handlePanelTap}>
-      <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0f0f1a' }}>
+    <div
+      className="relative max-w-[460px] mx-auto w-full"
+      style={{ perspective: 700 }}
+      onClick={handlePanelTap}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={resetTilt}
+    >
+      <div
+        ref={containerRef}
+        style={{
+          transform: `rotateX(${tilt.y * -6}deg) rotateY(${tilt.x * 6}deg)`,
+          transition: tilting ? 'transform 0.05s linear' : 'transform 0.6s ease-out',
+        }}
+      >
         <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }} aria-hidden="true">
-          <SkyVignette w={SVG_W} h={SVG_H} />
-          <DustField w={SVG_W} h={SVG_H} seed="triova-cyclesky-dust" />
-          <BackgroundStars w={SVG_W} h={SVG_H} seed="triova-cyclesky-bg" count={40} />
+          <SkyVignette w={SVG_W} h={SVG_H} uid={uid} />
+          <g style={{ transform: `translate(${tilt.x * -1.5}px, ${tilt.y * -1.5}px)`, transition: tilting ? undefined : 'transform 0.6s ease-out' }}>
+            <DustField w={SVG_W} h={SVG_H} seed="triova-cyclesky-dust" />
+            <BackgroundStars w={SVG_W} h={SVG_H} seed="triova-cyclesky-bg" count={40} />
+          </g>
 
-          <g className={settling ? 'universe-fade-out' : undefined} pointerEvents={settling ? 'none' : undefined}>
+          <g
+            className={settling ? 'universe-fade-out' : undefined}
+            pointerEvents={settling ? 'none' : undefined}
+            style={{ transform: `translate(${tilt.x * -4}px, ${tilt.y * -4}px)`, transition: tilting ? undefined : 'transform 0.6s ease-out' }}
+          >
             {/* Real constellation lines, only between stars actually lit */}
             {lines.filter(([a, b]) => litStarIds.has(a) && litStarIds.has(b)).map(([a, b]) => {
               const [x1, y1] = positions.get(a)!
@@ -653,7 +692,7 @@ function ArchiveThumb({
     >
       <div className="rounded-xl overflow-hidden" style={{ background: '#0f0f1a' }}>
         <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" aria-hidden="true">
-          <SkyVignette w={SVG_W} h={SVG_H} />
+          <SkyVignette w={SVG_W} h={SVG_H} uid={`archive-${seed}-${cycleStart.getTime()}`} />
           {lines.filter(([a, b]) => litStarIds.has(a) && litStarIds.has(b)).map(([a, b]) => {
             const [x1, y1] = positions.get(a)!
             const [x2, y2] = positions.get(b)!
