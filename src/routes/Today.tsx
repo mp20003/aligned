@@ -11,7 +11,6 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate } from 'react-router'
 import { useApp } from '../context/AppContext'
 import { getDailySuggestions, getPastWins } from '../data/suggestions'
 import WinCard, { ACCENT } from '../components/WinCard'
@@ -78,12 +77,33 @@ function useTodayKey(): string {
   return today
 }
 
+// Past days can't be backfilled (see CLAUDE.md/History.tsx: only today is
+// ever editable — the whole point of the real sky/history is that it
+// reflects genuine same-day practice, not tidied-up-later records). This
+// modal used to offer to fix a missed day; now it can only acknowledge it
+// and nudge toward showing up today instead, with a different encouraging
+// line each time so it doesn't read as a canned, repeated scold.
+const MISSED_DAY_QUOTES = [
+  "One missed day doesn't undo anything — but it can't be added back either. Today is the one that counts now.",
+  'Consistency is what turns effort into identity. Build it again starting today.',
+  "Real growth is ordinary and daily. Today's the day to pick it back up.",
+  "Your record can't be edited after the fact — only lived, one day at a time. Make today count.",
+  'Nothing is lost by missing a day. Nothing is gained by it either. Today is open.',
+  "You don't need a perfect record. You need today.",
+]
+
+function missedDayQuote(dateStr: string): string {
+  let h = 0
+  for (let i = 0; i < dateStr.length; i++) h = (Math.imul(31, h) + dateStr.charCodeAt(i)) | 0
+  return MISSED_DAY_QUOTES[Math.abs(h) % MISSED_DAY_QUOTES.length]
+}
+
 // Portaled straight to <body>: the page-transition wrapper around every
 // route applies a persistent transform after its enter animation finishes,
 // which per the CSS spec becomes the containing block for any
 // position:fixed descendant — a plain fixed overlay here would render
 // trapped behind the (also fixed) nav bar instead of above it.
-function MissedDayModal({ dateStr, onFix, onDismiss }: { dateStr: string; onFix: () => void; onDismiss: () => void }) {
+function MissedDayModal({ dateStr, onDismiss }: { dateStr: string; onDismiss: () => void }) {
   const formatted = new Date(dateStr + 'T12:00:00').toLocaleDateString('default', {
     weekday: 'long', month: 'long', day: 'numeric',
   })
@@ -103,24 +123,16 @@ function MissedDayModal({ dateStr, onFix, onDismiss }: { dateStr: string; onFix:
           <p className="font-sans text-xs uppercase tracking-widest text-white/50">{formatted}</p>
           <h2 className="font-serif text-xl text-white">Yesterday's a blank.</h2>
         </div>
-        <p className="font-sans text-sm text-white/50 leading-relaxed">
-          No wins logged. If that's just how the day went, there's nothing to do here. But if you forgot to record it, you can still add it.
+        <p className="font-serif text-base text-white/80 leading-relaxed italic">
+          {missedDayQuote(dateStr)}
         </p>
-        <div className="flex flex-col gap-2 mt-1">
-          <button
-            onClick={onFix}
-            className="w-full py-3 rounded-xl font-sans text-sm text-white btn-lift"
-            style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}
-          >
-            I forgot, let me add it
-          </button>
-          <button
-            onClick={onDismiss}
-            className="w-full py-2 font-sans text-xs text-white/50 hover:text-white/80 transition-colors"
-          >
-            That's how the day went
-          </button>
-        </div>
+        <button
+          onClick={onDismiss}
+          className="w-full py-3 rounded-xl font-sans text-sm text-white btn-lift mt-1"
+          style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)' }}
+        >
+          Show up today
+        </button>
       </div>
     </div>,
     document.body
@@ -135,7 +147,6 @@ function formatDateLabel(dateStr: string): string {
 
 export default function Today() {
   const { data, logWin, clearWin, addToBank, removeFromBank, recordWeeklyCheckin } = useApp()
-  const navigate = useNavigate()
 
   const date = useTodayKey()
   const entry = data.days[date] ?? { physical: null, mental: null, spiritual: null }
@@ -158,8 +169,9 @@ export default function Today() {
   const [fading, setFading] = useState(false)
 
   // If yesterday was completely missed and the user hasn't been asked about
-  // it yet, offer a chance to fix it before its star quietly explodes on
-  // the Triova page. Decided once per mount — a fresh load re-evaluates it.
+  // it yet, acknowledge it once — it can no longer be backfilled (only today
+  // is ever editable), so this is purely a nudge back toward today, not an
+  // offer to fix it. Decided once per mount — a fresh load re-evaluates it.
   const [missedPrompt] = useState<string | null>(() => {
     if (Object.keys(data.days).length === 0) return null // brand new account, nothing to have missed
     const yesterday = new Date()
@@ -175,12 +187,6 @@ export default function Today() {
   function handleDismissMissed() {
     if (missedPrompt) markMissedPrompted(missedPrompt)
     setMissedPromptOpen(false)
-  }
-
-  function handleFixMissed() {
-    if (!missedPrompt) return
-    markMissedPrompted(missedPrompt)
-    navigate('/history', { state: { selectDate: missedPrompt } })
   }
 
   function handleWinLogged(justLogged: CategoryKey) {
@@ -204,7 +210,7 @@ export default function Today() {
   }
 
   const missedModal = missedPrompt && missedPromptOpen && (
-    <MissedDayModal dateStr={missedPrompt} onFix={handleFixMissed} onDismiss={handleDismissMissed} />
+    <MissedDayModal dateStr={missedPrompt} onDismiss={handleDismissMissed} />
   )
 
   if (aligned) {

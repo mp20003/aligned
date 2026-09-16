@@ -8,13 +8,12 @@
  * Never shows streaks, percentages as goals, or failure language.
  */
 
-import { useState, useRef, useEffect } from 'react'
-import { useLocation } from 'react-router'
+import { useState, useRef } from 'react'
 import { useApp } from '../context/AppContext'
 import { getDailySuggestions, getPastWins } from '../data/suggestions'
-import WinCard from '../components/WinCard'
+import WinCard, { ACCENT } from '../components/WinCard'
 import { dateKey } from '../lib/date'
-import type { CategoryKey, DayEntry, WeeklyCheckins } from '../types'
+import type { CategoryKey, DayEntry, WeeklyCheckins, WinEntry } from '../types'
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
@@ -289,19 +288,8 @@ export default function History() {
   const { data, logWin, clearWin, clearDay, addToBank, removeFromBank } = useApp()
   const days30 = getLast30Days()
   const todayStr = dateKey(new Date())
-  const location = useLocation()
-  // Arriving from the "did you forget yesterday?" prompt on Today passes the
-  // date to jump straight to via navigate state, instead of landing on the
-  // grid with nothing selected.
-  const jumpToDate = (location.state as { selectDate?: string } | null)?.selectDate ?? null
-  const [selectedKey, setSelectedKey] = useState<string | null>(jumpToDate)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const shareRef = useRef<HTMLAnchorElement>(null)
-  const editorRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (jumpToDate) editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   function handleShare() {
     const dataUrl = generateShareCard(data.days, days30, data.onboarding.name)
@@ -388,7 +376,7 @@ export default function History() {
         </div>
 
         {/* Side panel */}
-        <div ref={editorRef} className="flex flex-col gap-6 lg:gap-8 flex-1">
+        <div className="flex flex-col gap-6 lg:gap-8 flex-1">
           {insight && (
             <div className="border-t lg:border-t-0 pt-5 lg:pt-0 flex flex-col gap-1" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
               <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/45">Pattern</p>
@@ -409,6 +397,7 @@ export default function History() {
               labels={data.onboarding.categories}
               allDays={data.days}
               bank={data.bank}
+              isToday={selectedKey === todayStr}
               onConfirm={(key, text, reflection) => logWin(selectedKey, key, text, reflection)}
               onClearWin={key => clearWin(selectedKey, key)}
               onSaveToBank={(key, text) => addToBank(key, text)}
@@ -417,7 +406,7 @@ export default function History() {
             />
           ) : (
             <p className="hidden lg:block font-sans text-sm lg:text-base text-white/50 italic">
-              Click any day to log or edit wins for it.
+              Click any day to view it. Only today can be logged or edited.
             </p>
           )}
         </div>
@@ -511,12 +500,34 @@ function Cell({
   )
 }
 
+// A past day's win, shown but not editable — see the note on DayEditor
+// below for why past days are locked entirely.
+function ReadOnlyWinRow({ categoryKey, label, entry }: { categoryKey: CategoryKey; label: string; entry: WinEntry | null }) {
+  const accent = ACCENT[categoryKey]
+  return (
+    <div className="rounded-2xl p-4 lg:p-5 flex flex-col gap-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+      <span className={`font-sans text-xs lg:text-sm uppercase tracking-widest ${accent.text}`}>{label}</span>
+      {entry ? (
+        <div className="flex flex-col gap-1">
+          <p className="font-serif text-base lg:text-lg text-white/85 leading-relaxed">{entry.text}</p>
+          {entry.reflection && (
+            <span className="font-sans text-xs text-white/40 uppercase tracking-widest">{entry.reflection}</span>
+          )}
+        </div>
+      ) : (
+        <p className="font-sans text-sm text-white/35 italic">No win logged</p>
+      )}
+    </div>
+  )
+}
+
 function DayEditor({
   dateKey: dk,
   entry,
   labels,
   allDays,
   bank,
+  isToday,
   onConfirm,
   onClearWin,
   onSaveToBank,
@@ -528,6 +539,7 @@ function DayEditor({
   labels: Record<CategoryKey, { label: string; definition: string }>
   allDays: Record<string, DayEntry>
   bank: Record<CategoryKey, string[]>
+  isToday: boolean
   onConfirm: (key: CategoryKey, text: string, reflection: string) => void
   onClearWin: (key: CategoryKey) => void
   onSaveToBank: (key: CategoryKey, text: string) => void
@@ -540,6 +552,27 @@ function DayEditor({
 
   function handleClear() {
     if (window.confirm(`Clear all wins for ${formatted}? This can't be undone.`)) onClear()
+  }
+
+  // Past days are locked to viewing only — see CLAUDE.md: forming the real
+  // sky/history takes consistent same-day practice, and being able to
+  // backfill any past day undermines that. Only today stays editable.
+  if (!isToday) {
+    return (
+      <div className="flex flex-col gap-4">
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">{formatted}</p>
+        <div className="flex flex-col gap-3 lg:gap-4">
+          {CATEGORIES.map(key => (
+            <ReadOnlyWinRow key={`${dk}-${key}`} categoryKey={key} label={labels[key].label} entry={entry[key]} />
+          ))}
+        </div>
+        {!hasAnyWin && (
+          <p className="font-sans text-sm text-white/35 italic">
+            Past days can't be logged after the fact — only today is editable.
+          </p>
+        )}
+      </div>
+    )
   }
 
   return (
