@@ -5,12 +5,13 @@
  * Never shown during onboarding.
  */
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router'
 import { useApp } from '../context/AppContext'
 import { dateKey } from '../lib/date'
 import { isPushSupported, getPushSubscriptionState, subscribeToPush, unsubscribeFromPush } from '../lib/push'
-import type { CategoryKey, AppData } from '../types'
+import cities from '../data/cities.json'
+import type { CategoryKey, AppData, Location } from '../types'
 
 const ACCENT_TEXT: Record<CategoryKey, string> = {
   physical: 'text-physical',
@@ -37,11 +38,18 @@ const SYNC_LABEL: Record<string, string> = {
 }
 
 export default function Settings() {
-  const { data, session, syncStatus, retrySync, updateSettings, resetPractice, clearRange, restoreData, signOut, deleteAccount } = useApp()
+  const { data, session, syncStatus, retrySync, updateSettings, updateLocation, resetPractice, clearRange, restoreData, signOut, deleteAccount } = useApp()
   const navigate = useNavigate()
 
   const [name, setName] = useState(data.onboarding.name)
   const [categories, setCategories] = useState({ ...data.onboarding.categories })
+  const [location, setLocation] = useState<Location | null>(data.onboarding.location)
+  const [citySearch, setCitySearch] = useState(data.onboarding.location?.name ?? '')
+  const filteredCities = useMemo(() => {
+    const q = citySearch.trim().toLowerCase()
+    if (!q) return []
+    return cities.filter(c => c.name.toLowerCase().includes(q)).slice(0, 8)
+  }, [citySearch])
   const [saved, setSaved] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [clearMonth, setClearMonth] = useState('')
@@ -83,6 +91,7 @@ export default function Settings() {
 
   function handleSave() {
     updateSettings(name.trim(), categories)
+    if (location) updateLocation(location)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -195,6 +204,43 @@ export default function Settings() {
             />
           </div>
         ))}
+      </section>
+
+      {/* Location — used to compute the real night sky on the Triova
+          screen. Only needs hemisphere/latitude band right, so a city
+          search rather than a device-geolocation permission prompt. */}
+      <section className="flex flex-col gap-3">
+        <p className="font-sans text-xs lg:text-sm uppercase tracking-widest text-white/50">Your location</p>
+        <input
+          type="text"
+          value={citySearch}
+          onChange={e => { setCitySearch(e.target.value); setLocation(null); setSaved(false) }}
+          placeholder="Search for your city…"
+          className="w-full bg-transparent py-2 font-serif text-lg lg:text-xl text-white/90 focus:outline-none"
+          style={{ borderBottom: '1px solid rgba(255,255,255,0.15)' }}
+        />
+        {filteredCities.length > 0 && (
+          <div className="flex flex-col gap-1">
+            {filteredCities.map(c => (
+              <button
+                key={c.name}
+                type="button"
+                onClick={() => { setLocation(c); setCitySearch(c.name); setSaved(false) }}
+                className={`text-left px-3 py-2 rounded-xl font-sans text-sm lg:text-base transition-colors ${
+                  location?.name === c.name ? 'bg-white text-charcoal' : 'text-white/70'
+                }`}
+                style={location?.name === c.name ? {} : surfaceBtn}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+        )}
+        {!location && (
+          <p className="font-sans text-xs lg:text-sm text-white/50">
+            Your Triova screen needs this to show your real night sky.
+          </p>
+        )}
       </section>
 
       <button

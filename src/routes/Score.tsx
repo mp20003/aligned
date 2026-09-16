@@ -1,71 +1,47 @@
 /**
- * Triova — Star Universe
+ * Triova — Your Real Sky
  *
- * Each aligned day (3 wins) fires a supernova and births a realistic star.
- * 1-2 wins: a comet flies in and rests. Missed past days explode and leave dust.
- * Future / today-not-yet: nothing rendered.
+ * Each user's sky is real astronomy for their own location (see
+ * src/lib/sky.ts and src/data/stars.json). Each 30-day cycle assigns one
+ * real star to each calendar day, brightest-first, within a fixed patch of
+ * sky near zenith at a representative evening moment for that cycle.
+ * Aligning all three categories on a day lights up its star; real
+ * constellation lines connect whichever lit stars are canonically joined.
  *
- * Universe panel: symbolic clusters — one per week, brightness = aligned days.
+ * Days are binary — a star is lit (3/3) or it isn't there yet. No partial
+ * credit, matching the app's own "no partial scores, ever" rule more
+ * precisely than the previous comet-for-1-2-wins design did.
+ *
+ * Past, completed cycles become an archive — "your sky, that month" — since
+ * no two people's pattern of which days they showed up will ever match.
  */
 
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { Link } from 'react-router'
 import { useApp } from '../context/AppContext'
-import { dateKey, mondayOf, getUniverseCycle } from '../lib/date'
+import { dateKey, getUniverseCycle, UNIVERSE_CYCLE_DAYS } from '../lib/date'
+import { getSkyForCycle, type SkyStar } from '../lib/sky'
 import type { CategoryKey } from '../types'
 
 const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
 
-const CATEGORY_COLORS: Record<CategoryKey, string> = {
-  physical:  '#1D9E75',
-  mental:    '#7F77DD',
-  spiritual: '#D85A30',
+type DaysMap = Record<string, { physical: unknown; mental: unknown; spiritual: unknown } | null>
+
+function getWins(days: DaysMap, dateStr: string): number {
+  const entry = days[dateStr]
+  if (!entry) return 0
+  return CATEGORIES.filter(k => entry[k as CategoryKey] !== null).length
 }
 
-// ── Date helpers ───────────────────────────────────────────────────────────────
-
-function isToday(d: Date): boolean {
-  return dateKey(d) === dateKey(new Date())
-}
-
-function isFuture(d: Date): boolean {
-  const today = new Date()
-  today.setHours(23, 59, 59, 999)
-  return d > today
-}
-
-
-
-function getCurrentWeek(): Date[] {
-  const today = new Date()
-  const dow = (today.getDay() + 6) % 7
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(today)
-    d.setDate(today.getDate() - dow + i)
+// The cycleDays calendar days belonging to a cycle, given its start date.
+function getCycleDates(cycleStart: Date, cycleDays: number): Date[] {
+  return Array.from({ length: cycleDays }, (_, i) => {
+    const d = new Date(cycleStart)
+    d.setDate(d.getDate() + i)
     return d
   })
 }
-
-function getAllWeeks(days: Record<string, unknown>): Date[][] {
-  const keys = Object.keys(days).sort()
-  if (keys.length === 0) return [getCurrentWeek()]
-  const firstDate = new Date(keys[0] + 'T12:00:00')
-  const firstMonday = mondayOf(firstDate)
-  const currentMonday = mondayOf(new Date())
-  const weeks: Date[][] = []
-  const cursor = new Date(firstMonday)
-  while (cursor <= currentMonday) {
-    weeks.push(Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(cursor)
-      d.setDate(cursor.getDate() + i)
-      return d
-    }))
-    cursor.setDate(cursor.getDate() + 7)
-  }
-  return weeks
-}
-
-// ── Seeded pseudo-random ───────────────────────────────────────────────────────
 
 function seededRand(seed: number) {
   let s = seed
@@ -74,122 +50,35 @@ function seededRand(seed: number) {
     return (s >>> 0) / 0xffffffff
   }
 }
-
 function strHash(str: string): number {
   let h = 0
-  for (let i = 0; i < str.length; i++) h = Math.imul(31, h) + str.charCodeAt(i) | 0
+  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0
   return Math.abs(h)
-}
-
-// ── Win helpers ────────────────────────────────────────────────────────────────
-
-function getWins(
-  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown } | null>,
-  dateStr: string
-): number {
-  const entry = days[dateStr]
-  if (!entry) return 0
-  return CATEGORIES.filter(k => entry[k] !== null).length
-}
-
-type DaysMap = Record<string, { physical: unknown; mental: unknown; spiritual: unknown } | null>
-
-// Single source of truth for "which days in this week are aligned/partial/dead" —
-// shared by the This Week header count, the constellation, and the universe cluster
-// so the numbers can never drift apart from each other.
-function getAlignedDates(week: Date[], days: DaysMap): Date[] {
-  // Today counts as soon as it's fully aligned — no need to wait until it's "over"
-  return week.filter(d => !isFuture(d) && getWins(days, dateKey(d)) === 3)
-}
-
-function getPartialDates(week: Date[], days: DaysMap): Date[] {
-  return week.filter(d => {
-    if (isFuture(d) || isToday(d)) return false
-    const w = getWins(days, dateKey(d))
-    return w > 0 && w < 3
-  })
-}
-
-// A real missed day never actually gets a stored entry (logWin always sets
-// at least one category; clearDay/clearWin delete the day rather than
-// nulling it out), so this can't require days[dk] !== undefined — that
-// condition is structurally almost unreachable and was silently hiding
-// every genuinely-missed day from the Universe view. Matches the simpler
-// check WeekConstellation already uses for the dust-explosion animation.
-function getDeadDates(week: Date[], days: DaysMap): Date[] {
-  return week.filter(d => {
-    if (isFuture(d) || isToday(d)) return false
-    return getWins(days, dateKey(d)) === 0
-  })
-}
-
-function formatWeekRange(week: Date[]): string {
-  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
-  return `${week[0].toLocaleDateString('en-US', opts)} – ${week[6].toLocaleDateString('en-US', opts)}`
-}
-
-function formatDayLabel(dateStr: string): string {
-  const d = new Date(dateStr + 'T12:00:00')
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
 function formatCycleDate(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
-
-// Whole days between two dates, ignoring time-of-day (so a cycle boundary at
-// 3pm doesn't read as an extra day depending on when "now" is checked).
+function formatCycleMonth(d: Date): string {
+  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+}
+function formatDayLabel(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00')
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+// Whole days between two dates, ignoring time-of-day.
 function daysUntil(from: Date, to: Date): number {
   const a = new Date(from); a.setHours(0, 0, 0, 0)
   const b = new Date(to); b.setHours(0, 0, 0, 0)
   return Math.round((b.getTime() - a.getTime()) / 86400000)
 }
-
 function formatResetLabel(daysLeft: number): string {
   if (daysLeft <= 0) return 'Resets today'
   if (daysLeft === 1) return 'Resets tomorrow'
   return `Resets in ${daysLeft} days`
 }
 
-// ── Procedural space names (seeded per date / week) ────────────────────────────
-
-const STAR_NAME_PARTS = [
-  'Vantor', 'Kepler', 'Astra', 'Lyrae', 'Corvid', 'Thessia', 'Nyxara', 'Caelum',
-  'Solari', 'Helion', 'Draconis', 'Vela', 'Orinth', 'Lumen', 'Sabrix', 'Halvern',
-  'Ekaris', 'Novara', 'Ithal', 'Quorin', 'Perael', 'Sundrel', 'Wrenna', 'Talvos',
-]
-
-function getStarName(dateStr: string): string {
-  const rand = seededRand(strHash(dateStr + 'starname'))
-  const part = STAR_NAME_PARTS[Math.floor(rand() * STAR_NAME_PARTS.length)]
-  const num = 100 + Math.floor(rand() * 900)
-  return `${part}-${num}`
-}
-
-const PLANET_LETTERS = ['b', 'c', 'd']
-
-function getPlanetNames(dateStr: string, count: number): string[] {
-  const star = getStarName(dateStr)
-  return PLANET_LETTERS.slice(0, count).map(letter => `${star} ${letter}`)
-}
-
-const CLUSTER_ADJ = [
-  'Ember', 'Halcyon', 'Wandering', 'Silent', 'Gilded', 'Hollow', 'Drifting',
-  'Faded', 'Velvet', 'Amber', 'Frozen', 'Distant', 'Quiet', 'Luminous', 'Restless',
-]
-const CLUSTER_NOUN = [
-  'Expanse', 'Drift', 'Cluster', 'Nebula', 'Reach', 'Veil', 'Basin', 'Field',
-  'Belt', 'Hollow', 'Current', 'Span', 'Deep', 'Cradle', 'Wake',
-]
-
-function getClusterName(mondayStr: string): string {
-  const rand = seededRand(strHash(mondayStr + 'clustername'))
-  const adj = CLUSTER_ADJ[Math.floor(rand() * CLUSTER_ADJ.length)]
-  const noun = CLUSTER_NOUN[Math.floor(rand() * CLUSTER_NOUN.length)]
-  return `${adj} ${noun}`
-}
-
-// ── Hover tooltip (custom-styled, matches app aesthetic) ───────────────────────
+// ── Hover tooltip ───────────────────────────────────────────────────────────
 
 type HoverInfo = { x: number; y: number; title: string; subtitle: string; id?: string }
 
@@ -205,6 +94,7 @@ function HoverCard({ x, y, title, subtitle }: HoverInfo) {
         border: '1px solid rgba(255,255,255,0.12)',
         boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
         width: 'max-content',
+        maxWidth: '70vw',
       }}
     >
       <span className="font-serif text-sm text-white whitespace-nowrap">{title}</span>
@@ -213,765 +103,137 @@ function HoverCard({ x, y, title, subtitle }: HoverInfo) {
   )
 }
 
-// ── Star positions ─────────────────────────────────────────────────────────────
-// This-week panel: zoomed-in viewBox so stars render large with full detail.
-// Universe clusters: same relative positions, scaled down to CLUSTER_R.
+// ── Projection: sky.ts's zenith-centered polar position -> SVG pixels ──────
 
 const SVG_W = 220
 const SVG_H = 200
+const PROJECT_RADIUS = 88 // px from panel center to the crop's outer edge
 
-function getStarPositions(mondayStr: string): [number, number][] {
-  const rand = seededRand(strHash(mondayStr))
-  const padding = 32
-  const positions: [number, number][] = []
-  let attempts = 0
-  while (positions.length < 7 && attempts < 300) {
-    attempts++
-    const x = padding + rand() * (SVG_W - padding * 2)
-    const y = padding + rand() * (SVG_H - padding * 2)
-    const tooClose = positions.some(([px, py]) => {
-      const dx = px - x, dy = py - y
-      return Math.sqrt(dx * dx + dy * dy) < 44
-    })
-    if (!tooClose) positions.push([x, y])
-  }
-  while (positions.length < 7) {
-    positions.push([padding + rand() * (SVG_W - padding * 2), padding + rand() * (SVG_H - padding * 2)])
-  }
-  return positions
+function project(star: SkyStar): [number, number] {
+  const r = star.r * PROJECT_RADIUS
+  return [SVG_W / 2 + r * Math.sin(star.theta), SVG_H / 2 - r * Math.cos(star.theta)]
 }
 
-// ── Star type (seeded per date) ────────────────────────────────────────────────
-// Each type has its own glow shape (radius/opacity), but always exactly one
-// bright core point — no type renders more than one "dot" for a single star.
-// "diffraction" used to also draw cross-shaped spike lines through the star;
-// removed since they read as clutter rather than detail.
-
-type StarType = 'diffraction' | 'giant'
-
-function getStarType(dateStr: string): StarType {
-  const rand = seededRand(strHash(dateStr + 'type'))
-  return rand() < 0.5 ? 'diffraction' : 'giant'
-}
-
-// A star can have 0–3 planets, weighted toward fewer.
-function getPlanetCount(dateStr: string): number {
-  const rand = seededRand(strHash(dateStr + 'planetcount'))
-  const r = rand()
-  if (r < 0.45) return 0
-  if (r < 0.75) return 1
-  if (r < 0.93) return 2
-  return 3
-}
-
-function getPlanetColor(dateStr: string, idx: number): string {
-  const rand = seededRand(strHash(dateStr + 'pcolor' + idx))
-  const keys = Object.keys(CATEGORY_COLORS) as CategoryKey[]
-  return CATEGORY_COLORS[keys[Math.floor(rand() * keys.length)]]
-}
-
-function getPlanetAngle(dateStr: string, idx: number): number {
-  const rand = seededRand(strHash(dateStr + 'pangle' + idx))
-  return rand() * Math.PI * 2
-}
-
-// Distance for planet idx (unscaled — multiply by the star's own scale at
-// render time). Spaced further apart than a single fixed increment so
-// orbits read as clearly separate rings.
-function getPlanetDistance(idx: number): number {
-  return 16 + idx * 14
-}
-
-// Kepler-ish: period grows with distance^1.5, so an outer planet visibly
-// crawls while an inner one zips around — a little organic jitter keeps it
-// from feeling like a formula.
-function getOrbitDuration(dateStr: string, idx: number): number {
-  const rand = seededRand(strHash(dateStr + 'orbitdur' + idx))
-  const refDist = getPlanetDistance(0)
-  const basePeriod = 6
-  const period = basePeriod * Math.pow(getPlanetDistance(idx) / refDist, 1.5)
-  const jitter = 0.85 + rand() * 0.3 // ±15%
-  return period * jitter
-}
-
-// Each planet has its own chance of a small moon orbiting it.
-function getHasMoon(dateStr: string, idx: number): boolean {
-  const rand = seededRand(strHash(dateStr + 'moon' + idx))
-  return rand() < 0.35
-}
-
-function getMoonAngle(dateStr: string, idx: number): number {
-  const rand = seededRand(strHash(dateStr + 'moonangle' + idx))
-  return rand() * Math.PI * 2
-}
-
-function getMoonOrbitDuration(dateStr: string, idx: number): number {
-  const rand = seededRand(strHash(dateStr + 'moondur' + idx))
-  return 2.5 + rand() * 2.5 // 2.5–5s — visibly faster than its planet's own orbit
-}
-
-// Every star has its own scale, so the field reads less uniform.
-function getStarScale(dateStr: string): number {
-  const rand = seededRand(strHash(dateStr + 'scale'))
-  return 0.8 + rand() * 0.6 // 0.8–1.4
-}
-
-// Every star gets 1–2 small asteroids on a slow, distant orbit.
-function getAsteroidCount(dateStr: string): number {
-  const rand = seededRand(strHash(dateStr + 'astcount'))
-  return rand() < 0.6 ? 1 : 2
-}
-
-function getAsteroidAngle(dateStr: string, idx: number): number {
-  const rand = seededRand(strHash(dateStr + 'astangle' + idx))
-  return rand() * Math.PI * 2
-}
-
-function getAsteroidOrbitDuration(dateStr: string, idx: number): number {
-  const rand = seededRand(strHash(dateStr + 'astdur' + idx))
-  return 22 + rand() * 18 // 22–40s — much slower than any planet
-}
-
-function getAsteroidSize(dateStr: string, idx: number): number {
-  const rand = seededRand(strHash(dateStr + 'astsize' + idx))
-  return 0.9 + rand() * 0.8
-}
-
-// ── Star colour (seeded per date) ──────────────────────────────────────────────
-
-const STAR_COLORS = ['#FFA94D', '#FF6B5E', '#6FA8FF', '#FFFFFF'] as const
-
-function getStarColor(dateStr: string): string {
-  const rand = seededRand(strHash(dateStr + 'starcolor'))
-  return STAR_COLORS[Math.floor(rand() * STAR_COLORS.length)]
-}
-
-// ── Realistic star SVG ─────────────────────────────────────────────────────────
-
-function RealisticStar({ cx, cy, type, dateStr, born }: {
-  cx: number; cy: number; type: StarType; dateStr: string; born: boolean
-}) {
-  const planetCount = getPlanetCount(dateStr)
-  const color = getStarColor(dateStr)
-  const scale = getStarScale(dateStr)
-  const asteroidCount = getAsteroidCount(dateStr)
-
-  const id = `glow-${dateStr.replace(/-/g, '')}`
-  const id2 = `glow2-${dateStr.replace(/-/g, '')}`
-
-  const starClass = born ? 'star-born' : 'star-full'
-
+// Faint decorative sprinkle behind a panel — pure atmosphere, not tied to
+// real star data, fixed seed so it doesn't reshuffle on re-render.
+function BackgroundStars({ w, h, seed, count }: { w: number; h: number; seed: string; count: number }) {
+  const rand = seededRand(strHash(seed))
+  const stars = Array.from({ length: count }, () => ({
+    x: rand() * w, y: rand() * h,
+    r: 0.3 + rand() * 0.5,
+    opacity: 0.06 + rand() * 0.18,
+  }))
   return (
-    <g className={starClass} style={{ transformOrigin: `${cx}px ${cy}px` }}>
+    <g>
+      {stars.map((s, i) => <circle key={i} cx={s.x} cy={s.y} r={s.r} fill="white" opacity={s.opacity} />)}
+    </g>
+  )
+}
+
+// ── A single real star ──────────────────────────────────────────────────────
+// Size comes from real magnitude (brighter = bigger), not decoration — a
+// star's visual weight always means something real. No planets/moons/
+// asteroids here (see CLAUDE.md: that flourish was flagged as decoration
+// disconnected from data in the app's own audit).
+
+function magToScale(mag: number): number {
+  const t = Math.max(0, Math.min(1, (6 - mag) / 7.5))
+  return 0.55 + t * 1.05
+}
+
+function RealisticStar({ cx, cy, mag, id, born }: { cx: number; cy: number; mag: number; id: number; born: boolean }) {
+  const scale = magToScale(mag)
+  const gradId = `glow-${id}`
+  const coreId = `glowcore-${id}`
+  return (
+    <g className={born ? 'star-born' : 'star-full'} style={{ transformOrigin: `${cx}px ${cy}px` }}>
       <defs>
-        <radialGradient id={id} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor={color} stopOpacity="0.9" />
-          <stop offset="35%" stopColor={color} stopOpacity="0.35" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        <radialGradient id={gradId} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#fff" stopOpacity="0.85" />
+          <stop offset="35%" stopColor="#fff" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#fff" stopOpacity="0" />
         </radialGradient>
-        <radialGradient id={id2} cx="50%" cy="50%" r="50%">
+        <radialGradient id={coreId} cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="white" stopOpacity="1" />
           <stop offset="100%" stopColor="white" stopOpacity="0" />
         </radialGradient>
       </defs>
-
-      {type === 'diffraction' && (
-        <>
-          {/* Outer glow kept tight to the star itself — at the old radius (36)
-              it regularly overlapped a neighbouring star's own glow, since
-              stars can sit as close as 44 units apart. */}
-          <circle cx={cx} cy={cy} r={16 * scale} fill={`url(#${id})`} />
-          <circle cx={cx} cy={cy} r={8 * scale} fill={`url(#${id2})`} />
-          <circle cx={cx} cy={cy} r={4 * scale} fill="white" />
-        </>
-      )}
-
-      {type === 'giant' && (
-        <>
-          {/* Same tightening as diffraction stars — was 44, now stays clear
-              of neighbouring stars at the minimum 44-unit spacing. */}
-          <circle cx={cx} cy={cy} r={20 * scale} fill={`url(#${id})`} />
-          <circle cx={cx} cy={cy} r={9 * scale} fill="white" opacity="0.18" />
-          <circle cx={cx} cy={cy} r={9 * scale} fill={`url(#${id2})`} />
-          <circle cx={cx} cy={cy} r={5 * scale} fill="white" />
-        </>
-      )}
-
-      {/* Planets — small orbiting orbs, clearly smaller than the star, each on its own ring */}
-      {Array.from({ length: planetCount }, (_, idx) => {
-        const planetColor = getPlanetColor(dateStr, idx)
-        const planetAngleDeg = (getPlanetAngle(dateStr, idx) * 180) / Math.PI
-        const planetDist = getPlanetDistance(idx) * scale
-        const orbitDuration = getOrbitDuration(dateStr, idx)
-        const px = cx + planetDist
-        const py = cy
-        const hasMoon = getHasMoon(dateStr, idx)
-        const moonAngleDeg = (getMoonAngle(dateStr, idx) * 180) / Math.PI
-        const moonDuration = getMoonOrbitDuration(dateStr, idx)
-        return (
-          <g key={idx}>
-            <animateTransform
-              attributeName="transform"
-              type="rotate"
-              from={`${planetAngleDeg} ${cx} ${cy}`}
-              to={`${planetAngleDeg + 360} ${cx} ${cy}`}
-              dur={`${orbitDuration}s`}
-              repeatCount="indefinite"
-            />
-            <circle cx={px} cy={py} r={6} fill={planetColor} opacity="0.12" />
-            <circle cx={px} cy={py} r={3} fill={planetColor} opacity="0.9" />
-            <circle cx={px - 0.8} cy={py - 0.8} r={1.1} fill="white" opacity="0.4" />
-            {hasMoon && (
-              <g>
-                <animateTransform
-                  attributeName="transform"
-                  type="rotate"
-                  from={`${moonAngleDeg} ${px} ${py}`}
-                  to={`${moonAngleDeg + 360} ${px} ${py}`}
-                  dur={`${moonDuration}s`}
-                  repeatCount="indefinite"
-                />
-                <circle cx={px + 4.5} cy={py} r={1} fill="white" opacity="0.55" />
-              </g>
-            )}
-          </g>
-        )
-      })}
-
-      {/* Asteroids — every star gets at least one, drifting on a slow, distant orbit,
-          each dragging a short fading dust trail behind its direction of travel */}
-      {Array.from({ length: asteroidCount }, (_, idx) => {
-        const angleDeg = (getAsteroidAngle(dateStr, idx) * 180) / Math.PI
-        const dist = (72 + idx * 16) * scale
-        const duration = getAsteroidOrbitDuration(dateStr, idx)
-        const size = getAsteroidSize(dateStr, idx)
-        const ax = cx + dist
-        const ay = cy
-        return (
-          <g key={`ast${idx}`}>
-            <animateTransform
-              attributeName="transform"
-              type="rotate"
-              from={`${angleDeg} ${cx} ${cy}`}
-              to={`${angleDeg + 360} ${cx} ${cy}`}
-              dur={`${duration}s`}
-              repeatCount="indefinite"
-            />
-            {[3, 2, 1].map(step => {
-              const rad = (-step * 3.5 * Math.PI) / 180
-              const tx = cx + dist * Math.cos(rad)
-              const ty = cy + dist * Math.sin(rad)
-              return (
-                <circle key={step} cx={tx} cy={ty}
-                  r={Math.max(size * (0.7 - step * 0.15), 0.15)}
-                  fill="#9C9284" opacity={Math.max(0.32 - step * 0.09, 0.04)} />
-              )
-            })}
-            <circle cx={ax} cy={ay} r={size} fill="#9C9284" opacity="0.55" />
-          </g>
-        )
-      })}
+      <circle cx={cx} cy={cy} r={14 * scale} fill={`url(#${gradId})`} />
+      <circle cx={cx} cy={cy} r={6 * scale} fill={`url(#${coreId})`} />
+      <circle cx={cx} cy={cy} r={2.6 * scale} fill="white" />
     </g>
   )
 }
 
-// ── Comet (1–2 wins) ───────────────────────────────────────────────────────────
-
-function Comet({ cx, cy, dateStr }: { cx: number; cy: number; dateStr: string }) {
-  const rand = seededRand(strHash(dateStr + 'comet'))
-  // Entry angle: always coming from upper-left or upper-right quadrants
-  const angles = [Math.PI * 0.75, Math.PI * 1.25, Math.PI * 0.55, Math.PI * 1.45]
-  const angle = angles[Math.floor(rand() * angles.length)]
-  const dist = 90
-  const startX = cx + Math.cos(angle) * dist
-  const startY = cy + Math.sin(angle) * dist
-
-  // Tail direction is opposite to travel direction
-  const tailAngle = angle + Math.PI
-  const tailLen = 40 + rand() * 20
-  const tailEndX = cx + Math.cos(tailAngle) * tailLen * 0.6
-  const tailEndY = cy + Math.sin(tailAngle) * tailLen * 0.6
-
-  const id = `comet-grad-${dateStr.replace(/-/g, '')}`
-  const animId = `comet-anim-${dateStr.replace(/-/g, '')}`
-
-  return (
-    <g>
-      <defs>
-        <linearGradient id={id} gradientUnits="userSpaceOnUse"
-          x1={`${cx}`} y1={`${cy}`} x2={`${tailEndX}`} y2={`${tailEndY}`}>
-          <stop offset="0%" stopColor="white" stopOpacity="0.9" />
-          <stop offset="100%" stopColor="white" stopOpacity="0" />
-        </linearGradient>
-        <style>{`
-          @keyframes ${animId} {
-            from { transform: translate(${startX - cx}px, ${startY - cy}px); opacity: 0; }
-            20% { opacity: 1; }
-            100% { transform: translate(0px, 0px); opacity: 1; }
-          }
-        `}</style>
-      </defs>
-      <g style={{ animation: `${animId} 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards`, transformOrigin: `${cx}px ${cy}px` }}>
-        {/* Tail */}
-        <line x1={cx} y1={cy} x2={tailEndX} y2={tailEndY}
-          stroke="white" strokeWidth="2.5" strokeLinecap="round" opacity="0.5" />
-        <line x1={cx} y1={cy} x2={tailEndX * 0.7 + cx * 0.3} y2={tailEndY * 0.7 + cy * 0.3}
-          stroke="white" strokeWidth="1" strokeLinecap="round" opacity="0.25" />
-        {/* Head */}
-        <circle cx={cx} cy={cy} r={8} fill="white" opacity="0.12" />
-        <circle cx={cx} cy={cy} r={3} fill="white" opacity="0.8" />
-        <circle cx={cx} cy={cy} r={1.5} fill="white" />
-      </g>
-    </g>
-  )
+// A day's real star, not yet lit — a faint point marking where it is. The
+// real sky doesn't wait for you; the star is already there, just not
+// claimed yet.
+function UnlitPoint({ cx, cy }: { cx: number; cy: number }) {
+  return <circle cx={cx} cy={cy} r={1.4} fill="white" opacity="0.16" />
 }
 
-// ── Explosion + dust ───────────────────────────────────────────────────────────
-
-function ExplosionParticles({ cx, cy, onDone }: { cx: number; cy: number; onDone: () => void }) {
-  const rand = seededRand(Math.round(cx * 100 + cy))
-  useEffect(() => {
-    const t = setTimeout(onDone, 1200)
-    return () => clearTimeout(t)
-  }, [onDone])
-
-  return (
-    <g>
-      <circle cx={cx} cy={cy} r={0} fill="none" stroke="#D85A30" strokeWidth="1.5">
-        <animate attributeName="r" from="0" to="38" dur="0.7s" fill="freeze" />
-        <animate attributeName="opacity" from="0.9" to="0" dur="0.7s" fill="freeze" />
-      </circle>
-      <circle cx={cx} cy={cy} r={0} fill="none" stroke="#7F77DD" strokeWidth="1">
-        <animate attributeName="r" from="0" to="22" dur="0.5s" fill="freeze" />
-        <animate attributeName="opacity" from="0.6" to="0" dur="0.5s" fill="freeze" />
-      </circle>
-      {Array.from({ length: 12 }, (_, i) => {
-        const angle = (i / 12) * Math.PI * 2
-        const dist = 20 + rand() * 24
-        const dx = Math.cos(angle) * dist
-        const dy = Math.sin(angle) * dist
-        const size = 1.2 + rand() * 2
-        const colors = ['#D85A30', '#7F77DD', '#1D9E75', 'white']
-        const color = colors[Math.floor(rand() * colors.length)]
-        return (
-          <circle key={i} cx={cx} cy={cy} r={size} fill={color}>
-            <animate attributeName="cx" to={cx + dx} dur="1s" fill="freeze" />
-            <animate attributeName="cy" to={cy + dy} dur="1s" fill="freeze" />
-            <animate attributeName="opacity" from="1" to="0" dur="1s" fill="freeze" />
-          </circle>
-        )
-      })}
-    </g>
-  )
-}
-
-function DustRemnant({ cx, cy, dateStr }: { cx: number; cy: number; dateStr: string }) {
-  const rand = seededRand(strHash(dateStr + 'dust'))
-  return (
-    <g opacity="0.22">
-      {Array.from({ length: 7 }, (_, i) => (
-        <circle key={i}
-          cx={cx + (rand() - 0.5) * 22}
-          cy={cy + (rand() - 0.5) * 22}
-          r={0.7 + rand() * 1.4}
-          fill="#D85A30"
-          opacity={0.3 + rand() * 0.5}
-        />
-      ))}
-      <circle cx={cx} cy={cy} r={1.2} fill="#7F77DD" opacity="0.35" />
-    </g>
-  )
-}
-
-// ── Nova burst (birth flash) ───────────────────────────────────────────────────
+// ── Nova burst (birth flash, unchanged from the previous design) ───────────
 
 function NovaBurst({ cx, cy, onDone }: { cx: number; cy: number; onDone: () => void }) {
   useEffect(() => {
     const t = setTimeout(onDone, 900)
     return () => clearTimeout(t)
   }, [onDone])
-
   return (
     <g>
       <circle cx={cx} cy={cy} r={0} fill="white" opacity="0.95">
-        <animate attributeName="r" from="0" to="80" dur="0.5s" fill="freeze" />
+        <animate attributeName="r" from="0" to="70" dur="0.5s" fill="freeze" />
         <animate attributeName="opacity" from="0.95" to="0" dur="0.5s" fill="freeze" />
       </circle>
-      <circle cx={cx} cy={cy} r={0} fill="none" stroke="#1D9E75" strokeWidth="2.5">
-        <animate attributeName="r" from="0" to="55" dur="0.7s" fill="freeze" />
+      <circle cx={cx} cy={cy} r={0} fill="none" stroke="#1D9E75" strokeWidth="2">
+        <animate attributeName="r" from="0" to="45" dur="0.7s" fill="freeze" />
         <animate attributeName="opacity" from="0.8" to="0" dur="0.7s" fill="freeze" />
       </circle>
       <circle cx={cx} cy={cy} r={0} fill="none" stroke="#7F77DD" strokeWidth="1.5">
-        <animate attributeName="r" from="0" to="70" dur="0.85s" fill="freeze" />
+        <animate attributeName="r" from="0" to="58" dur="0.85s" fill="freeze" />
         <animate attributeName="opacity" from="0.5" to="0" dur="0.85s" fill="freeze" />
       </circle>
     </g>
   )
 }
 
-// Faint far-field star sprinkles behind the This Week constellation — fixed
-// seed (not date-based), pure atmosphere so it doesn't reshuffle week to week.
-function WeekBackgroundStars() {
-  const rand = seededRand(strHash('triova-thisweek-bg-stars'))
-  const stars = Array.from({ length: 45 }, () => ({
-    x: rand() * SVG_W,
-    y: rand() * SVG_H,
-    r: 0.3 + rand() * 0.5,
-    opacity: 0.08 + rand() * 0.22,
-  }))
-  return (
-    <g>
-      {stars.map((s, i) => (
-        <circle key={i} cx={s.x} cy={s.y} r={s.r} fill="white" opacity={s.opacity} />
-      ))}
-    </g>
-  )
-}
-
-// ── Week constellation ─────────────────────────────────────────────────────────
-
-type ExplodingDay = { dateStr: string; cx: number; cy: number }
-type BornDay      = { dateStr: string; cx: number; cy: number }
-
-function WeekConstellation({
-  week,
-  days,
-}: {
-  week: Date[]
-  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown } | null>
-}) {
-  const mondayStr = dateKey(week[0])
-  const positions = getStarPositions(mondayStr)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const svgRef = useRef<SVGSVGElement>(null)
-  const [hover, setHover] = useState<HoverInfo | null>(null)
-
-  // The planet/asteroid/moon orbits are SMIL <animateTransform>, which
-  // defaults to starting at document-timeline zero — but some browsers
-  // occasionally leave that timeline paused for a moment after a fresh
-  // mount (especially right after the page-enter transform settles),
-  // which reads as the whole scene sitting still before suddenly starting
-  // to orbit. Explicitly unpausing on mount is the standard nudge to make
-  // sure the timeline is actually running rather than waiting on it.
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => svgRef.current?.unpauseAnimations?.())
-    return () => cancelAnimationFrame(raf)
-  }, [])
-
-  const [exploding, setExploding] = useState<ExplodingDay[]>([])
-  const [dusts, setDusts] = useState<Set<string>>(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('triova-dusts') ?? '[]')) }
-    catch { return new Set() }
-  })
-  const [novaQueue, setNovaQueue] = useState<BornDay[]>([])
-  const [activeNova, setActiveNova] = useState<BornDay | null>(null)
-  const [seenBorn, setSeenBorn] = useState<Set<string>>(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('triova-born') ?? '[]')) }
-    catch { return new Set() }
-  })
-
-  useEffect(() => {
-    const toExplode: ExplodingDay[] = []
-    const toBorn: BornDay[] = []
-    const newSeenBorn = new Set(seenBorn)
-
-    week.forEach((d, i) => {
-      if (isFuture(d)) return
-      const dk = dateKey(d)
-      const wins = getWins(days, dk)
-      const [cx, cy] = positions[i]
-      const dayInProgress = isToday(d) && wins < 3 // today doesn't "fail" until it's over
-
-      if (!dayInProgress && wins === 0 && !dusts.has(dk)) {
-        toExplode.push({ dateStr: dk, cx, cy })
-      }
-      if (wins === 3 && !newSeenBorn.has(dk)) {
-        toBorn.push({ dateStr: dk, cx, cy })
-        newSeenBorn.add(dk)
-      }
-    })
-
-    if (toBorn.length > 0) {
-      setSeenBorn(newSeenBorn)
-      localStorage.setItem('triova-born', JSON.stringify([...newSeenBorn]))
-      setNovaQueue(toBorn)
-    }
-
-    if (toExplode.length > 0) {
-      const delay = toBorn.length > 0 ? 1200 : 0
-      toExplode.forEach((e, i) => {
-        setTimeout(() => setExploding(prev => [...prev, e]), delay + i * 700)
-      })
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Play nova queue one at a time
-  useEffect(() => {
-    if (activeNova === null && novaQueue.length > 0) {
-      const [next, ...rest] = novaQueue
-      setActiveNova(next)
-      setNovaQueue(rest)
-    }
-  }, [activeNova, novaQueue])
-
-  function handleNovaDone() {
-    setActiveNova(null)
-  }
-
-  function handleExplosionDone(dk: string) {
-    setExploding(prev => prev.filter(e => e.dateStr !== dk))
-    setDusts(prev => {
-      const next = new Set(prev)
-      next.add(dk)
-      localStorage.setItem('triova-dusts', JSON.stringify([...next]))
-      return next
-    })
-  }
-
-  const isExplodingSet = new Set(exploding.map(e => e.dateStr))
-
-  // Constellation lines between full stars (today included once it's aligned)
-  // Also doubles as the list of tappable stars — see handlePanelTap below.
-  const fullStarIndices: number[] = []
-  week.forEach((d, i) => {
-    if (isFuture(d)) return
-    const dk = dateKey(d)
-    if (getWins(days, dk) === 3 && !dusts.has(dk) && !isExplodingSet.has(dk)) {
-      fullStarIndices.push(i)
-    }
-  })
-
-  // Single tap handler for the whole panel: finds the nearest rendered star (by
-  // simple distance, in viewBox space) instead of relying on tiny per-star SVG
-  // hit targets, which are unreliable on some mobile browsers — especially
-  // layered under a continuously-animated (twinkling) group.
-  function handlePanelTap(e: React.MouseEvent<HTMLDivElement>) {
-    const rect = containerRef.current?.getBoundingClientRect()
-    if (!rect || rect.width === 0) { setHover(null); return }
-    const scale = SVG_W / rect.width
-    const tapX = (e.clientX - rect.left) * scale
-    const tapY = (e.clientY - rect.top) * scale
-
-    for (const i of fullStarIndices) {
-      const [sx, sy] = positions[i]
-      if (Math.hypot(sx - tapX, sy - tapY) <= 26) {
-        const dk = dateKey(week[i])
-        setHover(prev => {
-          if (prev?.id === dk) return null // tap again to dismiss
-          const planetNames = getPlanetNames(dk, getPlanetCount(dk))
-          const title = `${getStarName(dk)}${planetNames.length ? ` · ${planetNames.join(', ')}` : ''}`
-          return { x: e.clientX - rect.left, y: e.clientY - rect.top, title, subtitle: formatDayLabel(dk), id: dk }
-        })
-        return
-      }
-    }
-    setHover(null)
-  }
-
-  return (
-    <div className="relative" onClick={handlePanelTap}>
-      {/* Background matches the page (#0f0f1a) exactly, rather than a
-          slightly-lighter shade, so the panel doesn't read as a separate
-          boxed widget sitting on top of the page. */}
-      <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0f0f1a' }}>
-        <svg ref={svgRef} viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }} aria-hidden="true">
-          <WeekBackgroundStars />
-
-          {/* Constellation lines */}
-          {fullStarIndices.slice(0, -1).map((i, idx) => {
-            const j = fullStarIndices[idx + 1]
-            const [x1, y1] = positions[i]
-            const [x2, y2] = positions[j]
-            return <line key={`${i}-${j}`} x1={x1} y1={y1} x2={x2} y2={y2}
-              stroke="white" strokeWidth="0.5" opacity="0.12" />
-          })}
-
-          {/* Stars, comets, dust */}
-          {week.map((d, i) => {
-            const dk = dateKey(d)
-            const [cx, cy] = positions[i]
-            const wins = getWins(days, dk)
-
-            if (isFuture(d)) return null
-            if (isToday(d) && wins < 3) return null // today shows nothing until it's fully aligned
-            if (isExplodingSet.has(dk)) return null
-
-            if (dusts.has(dk)) {
-              return <DustRemnant key={dk} cx={cx} cy={cy} dateStr={dk} />
-            }
-
-            if (wins === 3) {
-              return (
-                <RealisticStar
-                  key={dk}
-                  cx={cx} cy={cy}
-                  type={getStarType(dk)}
-                  dateStr={dk}
-                  born={false}
-                />
-              )
-            }
-            if (wins > 0) {
-              return <Comet key={dk} cx={cx} cy={cy} dateStr={dk} />
-            }
-            return null
-          })}
-
-          {/* Explosion animations */}
-          {exploding.map(e => (
-            <ExplosionParticles key={e.dateStr} cx={e.cx} cy={e.cy}
-              onDone={() => handleExplosionDone(e.dateStr)} />
-          ))}
-
-          {/* Nova burst overlaid on top of star — keyed distinctly from the
-              star itself (which renders in the block above using the same
-              date string as its key), since they're siblings at this point
-              and React requires unique keys among siblings. */}
-          {activeNova && (
-            <NovaBurst key={`nova-${activeNova.dateStr}`} cx={activeNova.cx} cy={activeNova.cy} onDone={handleNovaDone} />
-          )}
-        </svg>
-      </div>
-      {hover && <HoverCard {...hover} />}
-    </div>
-  )
-}
-
-// ── Universe panel ─────────────────────────────────────────────────────────────
-// Past weeks only — each week is a small cluster at a seeded position.
-// Star positions within each cluster are scaled-down versions of the full
-// week's star layout, so each cluster has a unique shape.
-
-const UNI_W = 340
-const UNI_H = 280
-const CLUSTER_R = 24
-
-// Places every week's cluster center, seeded per-week but nudged apart so no
-// two clusters (or their hover hit-areas) ever overlap — a prior version placed
-// each independently and could land two clusters on top of each other.
-function getClusterCenters(weeks: Date[][], W: number, H: number, padding: number): [number, number][] {
-  const minDist = 56
-  const positions: [number, number][] = []
-  weeks.forEach(week => {
-    const mondayStr = dateKey(week[0])
-    const rand = seededRand(strHash(mondayStr + 'center'))
-    let x = padding, y = padding, attempts = 0
-    do {
-      x = padding + rand() * (W - padding * 2)
-      y = padding + rand() * (H - padding * 2)
-      attempts++
-    } while (
-      attempts < 60 &&
-      positions.some(([px, py]) => Math.hypot(px - x, py - y) < minDist)
-    )
-    positions.push([x, y])
-  })
-  return positions
-}
-
-// Scale a week's full star positions down into a cluster of radius r around cx,cy
-function scalePositionsToCluster(
-  positions: [number, number][],
-  cx: number, cy: number, r: number
-): [number, number][] {
-  const midX = SVG_W / 2, midY = SVG_H / 2
-  const scale = (r * 0.85) / Math.max(SVG_W, SVG_H) * 2
-  return positions.map(([x, y]) => [
-    cx + (x - midX) * scale,
-    cy + (y - midY) * scale,
-  ])
-}
-
-// Ambient gas + far-field stars filling the empty space between clusters.
-// Fixed seed (not date-based) — this is pure atmosphere, not tied to any
-// day's data, so it should stay put rather than reshuffle with new weeks.
-const NEBULA_COLORS = ['#7F77DD', '#1D9E75', '#D85A30', '#6FA8FF'] as const
-
-function NebulaField() {
-  const rand = seededRand(strHash('triova-universe-nebula'))
-  const blobs = Array.from({ length: 5 }, () => ({
-    cx: rand() * UNI_W,
-    cy: rand() * UNI_H,
-    r: 40 + rand() * 55,
-    color: NEBULA_COLORS[Math.floor(rand() * NEBULA_COLORS.length)],
-    opacity: 0.05 + rand() * 0.06,
-  }))
-  const farStars = Array.from({ length: 36 }, () => ({
-    x: rand() * UNI_W,
-    y: rand() * UNI_H,
-    r: 0.3 + rand() * 0.5,
-    opacity: 0.12 + rand() * 0.28,
-  }))
-
-  return (
-    <g>
-      <defs>
-        {blobs.map((b, i) => (
-          <radialGradient key={i} id={`nebula-${i}`} cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={b.color} stopOpacity={b.opacity} />
-            <stop offset="100%" stopColor={b.color} stopOpacity="0" />
-          </radialGradient>
-        ))}
-      </defs>
-      {blobs.map((b, i) => (
-        <circle key={i} cx={b.cx} cy={b.cy} r={b.r} fill={`url(#nebula-${i})`} />
-      ))}
-      {farStars.map((s, i) => (
-        <circle key={i} cx={s.x} cy={s.y} r={s.r} fill="white" opacity={s.opacity} />
-      ))}
-    </g>
-  )
-}
-
-// A big, panel-wide "the old universe collapses into light and a new one is
-// born" burst — the same visual family as NovaBurst/ExplosionParticles but
-// scaled up to fill the whole Universe panel, since this is a much bigger
-// event than a single star. Plays once per cycle transition (see
-// UniversePanel's bursting state) — never replayed for a cycle already seen.
-function UniverseRebirthBurst({ w, h }: { w: number; h: number }) {
+// A finished cycle doesn't explode away — it settles into the archive. Soft
+// inward-drifting light instead of an outward destructive burst: this sky
+// is real and kept, not cleared.
+function SkySettleTransition({ w, h }: { w: number; h: number }) {
   const cx = w / 2, cy = h / 2
-  const [particles] = useState(() => Array.from({ length: 36 }, () => {
+  const [particles] = useState(() => Array.from({ length: 24 }, () => {
     const colors = ['#1D9E75', '#7F77DD', '#D85A30', '#FFFFFF']
+    const angle = Math.random() * Math.PI * 2
+    const dist = 70 + Math.random() * 60
     return {
-      angle: Math.random() * Math.PI * 2,
-      dist: 60 + Math.random() * 110,
+      startX: cx + Math.cos(angle) * dist,
+      startY: cy + Math.sin(angle) * dist,
       color: colors[Math.floor(Math.random() * colors.length)],
-      size: 1 + Math.random() * 2.2,
+      size: 0.8 + Math.random() * 1.6,
     }
   }))
-  const ringColors = ['#FFFFFF', '#1D9E75', '#7F77DD', '#D85A30']
-
   return (
     <g>
-      <rect x={0} y={0} width={w} height={h} fill="white">
-        <animate attributeName="opacity" values="0;0.85;0" keyTimes="0;0.16;1" dur="1.3s" fill="freeze" />
-      </rect>
-      {ringColors.map((color, i) => (
-        <circle key={color} cx={cx} cy={cy} r={0} fill="none" stroke={color} strokeWidth={i === 0 ? 2 : 1.5}>
-          <animate attributeName="r" from="0" to={140 + i * 12} dur="1.4s" begin={`${i * 0.08}s`} fill="freeze" />
-          <animate attributeName="opacity" from="0.9" to="0" dur="1.4s" begin={`${i * 0.08}s`} fill="freeze" />
+      <circle cx={cx} cy={cy} r={0} fill="white" opacity="0">
+        <animate attributeName="r" from="0" to="34" dur="1.6s" fill="freeze" />
+        <animate attributeName="opacity" values="0;0.5;0" keyTimes="0;0.5;1" dur="1.6s" fill="freeze" />
+      </circle>
+      {particles.map((p, i) => (
+        <circle key={i} cx={p.startX} cy={p.startY} r={p.size} fill={p.color} opacity="0.8">
+          <animate attributeName="cx" to={cx} dur="1.6s" fill="freeze" />
+          <animate attributeName="cy" to={cy} dur="1.6s" fill="freeze" />
+          <animate attributeName="opacity" from="0.8" to="0" dur="1.6s" fill="freeze" />
         </circle>
       ))}
-      {particles.map((p, i) => {
-        const dx = Math.cos(p.angle) * p.dist
-        const dy = Math.sin(p.angle) * p.dist
-        return (
-          <circle key={i} cx={cx} cy={cy} r={p.size} fill={p.color}>
-            <animate attributeName="cx" to={cx + dx} dur="1.6s" fill="freeze" />
-            <animate attributeName="cy" to={cy + dy} dur="1.6s" fill="freeze" />
-            <animate attributeName="opacity" from="1" to="0" dur="1.6s" fill="freeze" />
-          </circle>
-        )
-      })}
     </g>
   )
 }
 
-// Explains the monthly reset in the app's own identity/metaphor voice, and —
-// just as importantly — reassures the user nothing is actually deleted, since
-// a "universe exploding" animation could otherwise read as data loss.
-function UniverseCycleModal({ cycleEnd, onClose }: { cycleEnd: Date; onClose: () => void }) {
+// Explains the cycle in the app's own identity/metaphor voice, and — just as
+// importantly — reassures the user nothing is actually deleted, since a real
+// sky settling away could otherwise read as data loss.
+function SkyCycleModal({ cycleEnd, onClose }: { cycleEnd: Date; onClose: () => void }) {
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center px-6 py-12 overflow-y-auto"
@@ -979,15 +241,15 @@ function UniverseCycleModal({ cycleEnd, onClose }: { cycleEnd: Date; onClose: ()
       onClick={onClose}
     >
       <div className="w-full max-w-sm flex flex-col items-center gap-4 text-center" onClick={e => e.stopPropagation()}>
-        <p className="font-sans text-xs uppercase tracking-widest text-white/50">Why the universe resets</p>
+        <p className="font-sans text-xs uppercase tracking-widest text-white/50">Why this is your real sky</p>
         <p className="font-serif text-base text-white/90 leading-relaxed">
-          Real universes don't stay still. They expand, collapse, and begin again.
+          These are real stars, positioned exactly as they appear above you. Every 30 days you get a new patch of real sky to work with.
         </p>
         <p className="font-serif text-base text-white/90 leading-relaxed">
-          Yours works the same way. Every three months, on the day you started Triova, it folds back into light and a new one takes its place.
+          A star lights up on a day you show up for all three parts of yourself. Which ones light up is entirely yours — no one else will ever build this same picture.
         </p>
         <p className="font-serif text-base text-white/90 leading-relaxed">
-          Nothing you've logged is ever lost. Every win still lives in your History exactly as you left it. Only this view begins again, so each season becomes its own small universe to build.
+          Nothing is ever lost. When a cycle ends, its sky settles into your archive exactly as you left it, and a new one begins.
         </p>
         <p className="font-sans text-xs text-white/50 mt-1">Next reset: {formatCycleDate(cycleEnd)}</p>
         <button
@@ -1002,195 +264,197 @@ function UniverseCycleModal({ cycleEnd, onClose }: { cycleEnd: Date; onClose: ()
   )
 }
 
-function UniversePanel({
-  weeks,
+// ── The live (or, mid-transition, settling) cycle sky ───────────────────────
+
+type BornDay = { dateStr: string; cx: number; cy: number }
+
+function CycleSky({
+  cycleStart,
   days,
-  onSelectWeek,
-  accountCreated,
+  lat,
+  lon,
+  seed,
+  settling,
 }: {
-  weeks: Date[][]
-  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown } | null>
-  onSelectWeek: (week: Date[]) => void
-  accountCreated: Date
+  cycleStart: Date
+  days: DaysMap
+  lat: number
+  lon: number
+  seed: string
+  settling: boolean
 }) {
-  const padding = 36
+  const { stars, lines } = getSkyForCycle(lat, lon, cycleStart, UNIVERSE_CYCLE_DAYS, seed)
+  const dates = getCycleDates(cycleStart, UNIVERSE_CYCLE_DAYS)
   const containerRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<HoverInfo | null>(null)
-  const [showCycleInfo, setShowCycleInfo] = useState(false)
 
-  const cycle = getUniverseCycle(accountCreated, new Date())
+  const positions = new Map<number, [number, number]>()
+  stars.forEach(s => positions.set(s.id, project(s)))
 
-  const [seenCycle, setSeenCycle] = useState<number | null>(() => {
-    const raw = localStorage.getItem('triova-universe-cycle-seen')
-    return raw === null ? null : Number(raw)
+  const [novaQueue, setNovaQueue] = useState<BornDay[]>([])
+  const [activeNova, setActiveNova] = useState<BornDay | null>(null)
+  const [seenBorn, setSeenBorn] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('triova-born') ?? '[]')) }
+    catch { return new Set() }
   })
-  const [bursting, setBursting] = useState(() => seenCycle !== null && seenCycle < cycle.index)
 
   useEffect(() => {
-    if (seenCycle === null) {
-      // First time this device has ever looked at the universe — nothing to
-      // reset from, so just record the current cycle without animating.
-      localStorage.setItem('triova-universe-cycle-seen', String(cycle.index))
-      setSeenCycle(cycle.index)
-      return
-    }
-    if (seenCycle < cycle.index) {
-      const t = setTimeout(() => {
-        localStorage.setItem('triova-universe-cycle-seen', String(cycle.index))
-        setSeenCycle(cycle.index)
-        setBursting(false)
-      }, 1800)
-      return () => clearTimeout(t)
+    if (settling) return // don't fire novas while a past cycle is fading out
+    const toBorn: BornDay[] = []
+    const newSeenBorn = new Set(seenBorn)
+    dates.forEach((d, i) => {
+      const dk = dateKey(d)
+      const star = stars[i]
+      if (!star) return
+      if (getWins(days, dk) === 3 && !newSeenBorn.has(dk)) {
+        const pos = positions.get(star.id)
+        if (pos) { toBorn.push({ dateStr: dk, cx: pos[0], cy: pos[1] }); newSeenBorn.add(dk) }
+      }
+    })
+    if (toBorn.length > 0) {
+      setSeenBorn(newSeenBorn)
+      localStorage.setItem('triova-born', JSON.stringify([...newSeenBorn]))
+      setNovaQueue(toBorn)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [cycleStart.getTime(), settling])
 
-  // Weeks belonging to the cycle that just ended, shown fading out during the
-  // burst — a week counts if any part of it (its Sunday) fell in that cycle.
-  const previousCycleWeeks = bursting
-    ? weeks.filter(w => {
-        const sunday = dateKey(w[6])
-        const prevStart = dateKey(cycle.start)
-        return sunday < prevStart
-      })
-    : []
+  useEffect(() => {
+    if (activeNova === null && novaQueue.length > 0) {
+      const [next, ...rest] = novaQueue
+      setActiveNova(next)
+      setNovaQueue(rest)
+    }
+  }, [activeNova, novaQueue])
 
-  // Weeks belonging to the current cycle — a week counts in if any part of it
-  // (its Sunday) has reached the cycle's start date. Underlying win data for
-  // earlier weeks is untouched; they just stop being rendered as clusters here.
-  const visibleWeeks = weeks.filter(w => dateKey(w[6]) >= dateKey(cycle.start))
+  // Lit stars this cycle — also the tappable set for handlePanelTap below.
+  const litStarIds = new Set<number>()
+  dates.forEach((d, i) => {
+    const star = stars[i]
+    if (star && getWins(days, dateKey(d)) === 3) litStarIds.add(star.id)
+  })
 
-  const renderedWeeks = bursting ? previousCycleWeeks : visibleWeeks
-  const centers = getClusterCenters(renderedWeeks, UNI_W, UNI_H, padding)
-  const totalStars = weeks.reduce((acc, w) => acc + getAlignedDates(w, days).length, 0)
-  const daysLeft = daysUntil(new Date(), cycle.end)
-
-  function handleClusterHover(e: React.MouseEvent, mondayStr: string, week: Date[]) {
+  function handlePanelTap(e: React.MouseEvent<HTMLDivElement>) {
     const rect = containerRef.current?.getBoundingClientRect()
-    if (!rect) return
-    setHover({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-      title: getClusterName(mondayStr),
-      subtitle: formatWeekRange(week),
-    })
+    if (!rect || rect.width === 0) { setHover(null); return }
+    const scale = SVG_W / rect.width
+    const tapX = (e.clientX - rect.left) * scale
+    const tapY = (e.clientY - rect.top) * scale
+
+    for (const star of stars) {
+      if (!litStarIds.has(star.id)) continue
+      const [sx, sy] = positions.get(star.id)!
+      if (Math.hypot(sx - tapX, sy - tapY) <= 20) {
+        setHover(prev => {
+          if (prev?.id === String(star.id)) return null
+          const title = star.name ?? `A star in ${star.con ?? 'the sky'}`
+          const dayIdx = dates.findIndex((_, i) => stars[i]?.id === star.id)
+          const subtitle = dayIdx >= 0 ? formatDayLabel(dateKey(dates[dayIdx])) : ''
+          return { x: e.clientX - rect.left, y: e.clientY - rect.top, title, subtitle, id: String(star.id) }
+        })
+        return
+      }
+    }
+    setHover(null)
   }
 
   return (
-    <div className="flex flex-col gap-3 lg:h-full">
-      {showCycleInfo && <UniverseCycleModal cycleEnd={cycle.end} onClose={() => setShowCycleInfo(false)} />}
-      <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
-        <p className="font-sans text-xs uppercase tracking-widest font-medium text-white/50">Your universe</p>
-        <div className="flex items-center gap-3">
-          <p className="font-sans text-xs font-medium text-white/50">
-            {totalStars} star{totalStars !== 1 ? 's' : ''} across your journey
-          </p>
-          <button
-            onClick={() => setShowCycleInfo(true)}
-            className="font-sans text-xs font-medium text-white/50 hover:text-white/80 transition-colors underline underline-offset-4"
-          >
-            {formatResetLabel(daysLeft)}
-          </button>
-        </div>
-      </div>
-      <div className="relative">
-        <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0f0f1a' }}>
-          <svg viewBox={`0 0 ${UNI_W} ${UNI_H}`} className="w-full" aria-hidden="true">
-          <NebulaField />
-          <g className={bursting ? 'universe-fade-out' : undefined} pointerEvents={bursting ? 'none' : undefined}>
-          {renderedWeeks.map((week, wi) => {
-            const isCurrent = !bursting && wi === renderedWeeks.length - 1
-            const mondayStr = dateKey(week[0])
-            const [cx, cy] = centers[wi]
+    <div className="relative" onClick={handlePanelTap}>
+      <div ref={containerRef} className="rounded-2xl overflow-hidden" style={{ background: '#0f0f1a' }}>
+        <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" style={{ overflow: 'visible' }} aria-hidden="true">
+          <BackgroundStars w={SVG_W} h={SVG_H} seed="triova-cyclesky-bg" count={40} />
 
-            // Use scaled-down positions for cluster shape variety
-            const fullPositions = getStarPositions(mondayStr)
-            const clusterPositions = scalePositionsToCluster(fullPositions, cx, cy, CLUSTER_R)
+          <g className={settling ? 'universe-fade-out' : undefined} pointerEvents={settling ? 'none' : undefined}>
+            {/* Real constellation lines, only between stars actually lit */}
+            {lines.filter(([a, b]) => litStarIds.has(a) && litStarIds.has(b)).map(([a, b]) => {
+              const [x1, y1] = positions.get(a)!
+              const [x2, y2] = positions.get(b)!
+              return <line key={`${a}-${b}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="0.5" opacity="0.18" />
+            })}
 
-            const alignedDays = getAlignedDates(week, days)
-            const partialDays = getPartialDates(week, days)
-            const deadDays = getDeadDates(week, days)
-
-            if (alignedDays.length === 0 && partialDays.length === 0 && deadDays.length === 0) {
-              return <g key={wi} />
-            }
-
-            return (
-              <g key={wi}>
-                {/* Invisible hit area, sized to stay clear of neighbouring clusters (min spacing 56).
-                    Click/tap opens the full-size view — works on both desktop and mobile,
-                    unlike the hover-only tooltip. */}
-                <circle
-                  cx={cx} cy={cy} r={CLUSTER_R} fill="transparent" pointerEvents="all"
-                  style={{ cursor: 'pointer', touchAction: 'manipulation' }}
-                  onMouseEnter={(e) => handleClusterHover(e, mondayStr, week)}
-                  onMouseLeave={() => setHover(null)}
-                  onClick={() => onSelectWeek(week)}
-                />
-                {/* Soft glow ring for current week — marks where it's forming */}
-                {isCurrent && (
-                  <circle cx={cx} cy={cy} r={CLUSTER_R + 5}
-                    fill="none" stroke="rgba(127,119,221,0.18)" strokeWidth="1" strokeDasharray="2 4" />
-                )}
-                {/* Bright stars — aligned days: exactly one dot per day */}
-                {alignedDays.map((d, di) => {
-                  const idx = week.indexOf(d)
-                  const [sx, sy] = clusterPositions[idx]
-                  return <circle key={`a${di}`} cx={sx} cy={sy} r={1.8} fill="white" opacity="0.9" />
-                })}
-                {/* Dim dots — partial days */}
-                {partialDays.map((d, di) => {
-                  const idx = week.indexOf(d)
-                  const [sx, sy] = clusterPositions[idx]
-                  return <circle key={`p${di}`} cx={sx} cy={sy} r={1} fill="white" opacity="0.2" />
-                })}
-                {/* Dead stars — fully missed days (dust specks) */}
-                {deadDays.map((d, di) => {
-                  const idx = week.indexOf(d)
-                  const [sx, sy] = clusterPositions[idx]
-                  return <circle key={`d${di}`} cx={sx} cy={sy} r={1.2} fill="#D85A30" opacity="0.35" />
-                })}
-              </g>
-            )
-          })}
+            {stars.map(star => {
+              const [cx, cy] = positions.get(star.id)!
+              if (!litStarIds.has(star.id)) return <UnlitPoint key={star.id} cx={cx} cy={cy} />
+              return <RealisticStar key={star.id} cx={cx} cy={cy} mag={star.mag} id={star.id} born={false} />
+            })}
           </g>
-          {bursting && <UniverseRebirthBurst w={UNI_W} h={UNI_H} />}
-          </svg>
-        </div>
-        {hover && <HoverCard {...hover} />}
+
+          {settling && <SkySettleTransition w={SVG_W} h={SVG_H} />}
+
+          {activeNova && (
+            <NovaBurst key={`nova-${activeNova.dateStr}`} cx={activeNova.cx} cy={activeNova.cy}
+              onDone={() => setActiveNova(null)} />
+          )}
+        </svg>
       </div>
-      {/* Mirrors the spacer in the This Week column so both captions land
-          on the same baseline regardless of which panel is intrinsically
-          taller. */}
-      <div className="hidden lg:block flex-1" />
-      <p className="font-serif text-sm text-white/50 italic text-center">
-        {bursting
-          ? 'Your universe is folding back into light, and a new one is beginning.'
-          : 'Each cluster is one week of your life — the brighter it glows, the more days you stayed aligned.'}
-      </p>
+      {hover && <HoverCard {...hover} />}
     </div>
   )
 }
 
-// ── Main screen ────────────────────────────────────────────────────────────────
+// ── Archive: one independent thumbnail per completed cycle ─────────────────
 
-// Full-size overlay for a week selected from the Universe panel — sits on
-// top of the This Week page, dismissed with the close button.
-function ExpandedWeekModal({
-  week,
-  days,
-  onClose,
+function ArchiveThumb({
+  cycleStart, days, lat, lon, seed, onOpen,
 }: {
-  week: Date[]
-  days: Record<string, { physical: unknown; mental: unknown; spiritual: unknown } | null>
+  cycleStart: Date
+  days: DaysMap
+  lat: number
+  lon: number
+  seed: string
+  onOpen: () => void
+}) {
+  const { stars, lines } = getSkyForCycle(lat, lon, cycleStart, UNIVERSE_CYCLE_DAYS, seed)
+  const dates = getCycleDates(cycleStart, UNIVERSE_CYCLE_DAYS)
+  const positions = new Map<number, [number, number]>()
+  stars.forEach(s => positions.set(s.id, project(s)))
+  const litStarIds = new Set<number>()
+  dates.forEach((d, i) => {
+    const star = stars[i]
+    if (star && getWins(days, dateKey(d)) === 3) litStarIds.add(star.id)
+  })
+  const litCount = litStarIds.size
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex flex-col gap-1.5 text-left rounded-2xl p-2 transition-colors hover:bg-white/[0.03]"
+    >
+      <div className="rounded-xl overflow-hidden" style={{ background: '#0f0f1a' }}>
+        <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} className="w-full" aria-hidden="true">
+          {lines.filter(([a, b]) => litStarIds.has(a) && litStarIds.has(b)).map(([a, b]) => {
+            const [x1, y1] = positions.get(a)!
+            const [x2, y2] = positions.get(b)!
+            return <line key={`${a}-${b}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="0.5" opacity="0.18" />
+          })}
+          {stars.map(star => {
+            const [cx, cy] = positions.get(star.id)!
+            if (!litStarIds.has(star.id)) return <UnlitPoint key={star.id} cx={cx} cy={cy} />
+            return <RealisticStar key={star.id} cx={cx} cy={cy} mag={star.mag} id={star.id + 100000} born={false} />
+          })}
+        </svg>
+      </div>
+      <p className="font-sans text-xs text-white/50 text-center">
+        {formatCycleMonth(cycleStart)} · {litCount}/{UNIVERSE_CYCLE_DAYS}
+      </p>
+    </button>
+  )
+}
+
+function ExpandedSkyModal({
+  cycleStart, days, lat, lon, seed, onClose,
+}: {
+  cycleStart: Date
+  days: DaysMap
+  lat: number
+  lon: number
+  seed: string
   onClose: () => void
 }) {
-  const mondayStr = dateKey(week[0])
-  // Rendered via a portal straight to <body>: the page-transition wrapper that
-  // hosts every route applies a persistent `transform` (translateY) after its
-  // enter animation finishes, and per the CSS spec that makes it the
-  // containing block for any `position: fixed` descendant — trapping a plain
-  // fixed overlay behind the (also fixed) nav bar instead of above it.
+  // Same stacking-context reasoning as the rest of this screen's overlays —
+  // the page-transition wrapper's transform makes it the containing block
+  // for position:fixed descendants, so this has to portal straight to body.
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center px-6 py-12 overflow-y-auto"
@@ -1200,79 +464,161 @@ function ExpandedWeekModal({
       <div className="w-full max-w-md lg:max-w-xl flex flex-col gap-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-0.5">
-            <p className="font-sans text-xs uppercase tracking-widest text-white/50">{getClusterName(mondayStr)}</p>
-            <h2 className="font-serif text-xl lg:text-2xl text-white">{formatWeekRange(week)}</h2>
+            <p className="font-sans text-xs uppercase tracking-widest text-white/50">Your sky</p>
+            <h2 className="font-serif text-xl lg:text-2xl text-white">{formatCycleMonth(cycleStart)}</h2>
           </div>
           <button
             onClick={onClose}
             className="shrink-0 font-sans text-xs lg:text-sm text-white/50 hover:text-white/80 transition-colors underline underline-offset-4"
           >
-            Back to this week
+            Back
           </button>
         </div>
-        <WeekConstellation week={week} days={days} />
+        <CycleSky cycleStart={cycleStart} days={days} lat={lat} lon={lon} seed={seed} settling={false} />
       </div>
     </div>,
     document.body
   )
 }
 
+// ── Main screen ──────────────────────────────────────────────────────────
+
+function LocationPrompt() {
+  return (
+    <div className="min-h-screen max-w-md mx-auto px-6 pt-16 flex flex-col items-center text-center gap-4"
+      style={{ background: '#0f0f1a' }}>
+      <p className="font-sans text-xs uppercase tracking-widest text-white/50">Triova</p>
+      <h1 className="font-serif text-2xl text-white">One more thing</h1>
+      <p className="font-sans text-sm text-white/50 leading-relaxed max-w-xs">
+        Your Triova is built from the real night sky above you. Set your location in Settings to see it.
+      </p>
+      <Link to="/settings" className="mt-2 font-sans text-sm text-white underline underline-offset-4">
+        Go to Settings
+      </Link>
+    </div>
+  )
+}
+
 export default function Score() {
   const { data, session } = useApp()
   const accountCreated = session ? new Date(session.user.created_at) : new Date()
-  const week = getCurrentWeek()
-  const allWeeks = getAllWeeks(data.days)
-  const weekAligned = getAlignedDates(week, data.days).length
-  const elapsed = week.filter(d => !isFuture(d) && !isToday(d)).length
-  const [expandedWeek, setExpandedWeek] = useState<Date[] | null>(null)
+  const location = data.onboarding.location
+  const [expandedCycle, setExpandedCycle] = useState<Date | null>(null)
+
+  const cycle = getUniverseCycle(accountCreated, new Date())
+  const seed = session?.user.id ?? 'anon'
+  const [showCycleInfo, setShowCycleInfo] = useState(false)
+
+  const [seenCycle, setSeenCycle] = useState<number | null>(() => {
+    const raw = localStorage.getItem('triova-universe-cycle-seen')
+    return raw === null ? null : Number(raw)
+  })
+  const [settling, setSettling] = useState(() => seenCycle !== null && seenCycle < cycle.index)
+
+  useEffect(() => {
+    if (seenCycle === null) {
+      localStorage.setItem('triova-universe-cycle-seen', String(cycle.index))
+      setSeenCycle(cycle.index)
+      return
+    }
+    if (seenCycle < cycle.index) {
+      const t = setTimeout(() => {
+        localStorage.setItem('triova-universe-cycle-seen', String(cycle.index))
+        setSeenCycle(cycle.index)
+        setSettling(false)
+      }, 1800)
+      return () => clearTimeout(t)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (!location) return <LocationPrompt />
+
+  const daysLeft = daysUntil(new Date(), cycle.end)
+  const displayedCycleStart = settling
+    ? new Date(cycle.start.getTime() - UNIVERSE_CYCLE_DAYS * 86400000)
+    : cycle.start
+
+  // Completed cycles only (current, still-forming one is the live panel).
+  const archiveCycles: Date[] = []
+  for (let i = 0; i < cycle.index; i++) {
+    archiveCycles.push(new Date(accountCreated.getTime() + i * UNIVERSE_CYCLE_DAYS * 86400000))
+  }
+  archiveCycles.reverse() // most recent first
 
   return (
     <div className="min-h-screen max-w-md lg:max-w-6xl mx-auto px-6 lg:px-10 pt-12 lg:pt-16 pb-28 flex flex-col gap-10"
       style={{ background: '#0f0f1a' }}>
 
-      {expandedWeek && (
-        <ExpandedWeekModal week={expandedWeek} days={data.days} onClose={() => setExpandedWeek(null)} />
+      {showCycleInfo && <SkyCycleModal cycleEnd={cycle.end} onClose={() => setShowCycleInfo(false)} />}
+      {expandedCycle && (
+        <ExpandedSkyModal
+          cycleStart={expandedCycle} days={data.days} lat={location.lat} lon={location.lon} seed={seed}
+          onClose={() => setExpandedCycle(null)}
+        />
       )}
 
       {/* Header */}
       <div className="flex flex-col gap-1">
         <p className="font-sans text-xs uppercase tracking-widest font-semibold text-white/50">Triova</p>
-        <h1 className="font-serif font-semibold text-2xl lg:text-4xl text-white">Your Triova</h1>
+        <h1 className="font-serif font-semibold text-2xl lg:text-4xl text-white">Your Sky</h1>
         <p className="font-sans text-xs text-white/50 leading-relaxed mt-1">
-          Every win you log fires a supernova. Every star you birth is yours to keep.
+          Real stars, above {location.name}. Every aligned day claims one.
         </p>
       </div>
 
-      {/* This week + Universe — stacked on mobile, side-by-side on desktop
-          so the page uses the full width of a laptop screen instead of
-          sitting in a narrow centered column. */}
       <div className="flex flex-col gap-10 lg:grid lg:grid-cols-2 lg:gap-10 lg:items-stretch">
-        {/* This week */}
+        {/* Live sky */}
         <div className="flex flex-col gap-3 lg:h-full">
           <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
             <p className="font-sans text-xs uppercase tracking-widest font-medium text-white/50">
-              This week · {formatWeekRange(week)}
+              This cycle
             </p>
-            <p className="font-sans text-xs font-medium text-white/50">
-              {weekAligned} star{weekAligned !== 1 ? 's' : ''} born · {elapsed} day{elapsed !== 1 ? 's' : ''} elapsed
-            </p>
+            <button
+              onClick={() => setShowCycleInfo(true)}
+              className="font-sans text-xs font-medium text-white/50 hover:text-white/80 transition-colors underline underline-offset-4"
+            >
+              {formatResetLabel(daysLeft)}
+            </button>
           </div>
 
-          <WeekConstellation week={week} days={data.days} />
+          <CycleSky
+            cycleStart={displayedCycleStart} days={data.days} lat={location.lat} lon={location.lon}
+            seed={seed} settling={settling}
+          />
 
-          {/* Flexible spacer: when this column is stretched taller than its
-              own content (to match the Universe column), this absorbs the
-              extra space so the caption still lands on the same baseline
-              as the Universe caption instead of hugging the panel above it. */}
           <div className="hidden lg:block flex-1" />
 
           <p className="font-serif text-sm text-white/50 italic text-center">
-            Each star is a day you aligned all three practices at once.
+            {settling
+              ? 'Your sky is settling into your archive, and a new one is beginning.'
+              : 'Each star is real — it lights up the day you align all three practices at once.'}
           </p>
         </div>
 
-        {/* Universe */}
-        <UniversePanel weeks={allWeeks} days={data.days} onSelectWeek={setExpandedWeek} accountCreated={accountCreated} />
+        {/* Archive */}
+        <div className="flex flex-col gap-3 lg:h-full">
+          <p className="font-sans text-xs uppercase tracking-widest font-medium text-white/50">Your archive</p>
+          {archiveCycles.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center rounded-2xl px-6 py-10 text-center"
+              style={{ background: '#0f0f1a' }}>
+              <p className="font-sans text-sm text-white/40">Your first finished sky will appear here.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {archiveCycles.map(cs => (
+                <ArchiveThumb
+                  key={cs.getTime()} cycleStart={cs} days={data.days} lat={location.lat} lon={location.lon}
+                  seed={seed} onOpen={() => setExpandedCycle(cs)}
+                />
+              ))}
+            </div>
+          )}
+          <div className="hidden lg:block flex-1" />
+          <p className="font-serif text-sm text-white/50 italic text-center">
+            One real sky per finished cycle — nobody else will ever build the same one.
+          </p>
+        </div>
       </div>
     </div>
   )

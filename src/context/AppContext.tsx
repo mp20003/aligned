@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, ty
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { logEvent } from '../lib/analytics'
-import type { AppData, CategoryKey, OnboardingData } from '../types'
+import type { AppData, CategoryKey, Location, OnboardingData } from '../types'
 
 const STORAGE_KEY = 'three-wins-data'
 const CATEGORIES: CategoryKey[] = ['physical', 'mental', 'spiritual']
@@ -16,17 +16,28 @@ const defaultData: AppData = {
       mental:    { label: 'Mental',    definition: '' },
       spiritual: { label: 'Spiritual', definition: '' },
     },
+    location: null,
   },
   days: {},
   bank: { physical: [], mental: [], spiritual: [] },
   checkins: {},
 }
 
+// Onboarding data saved before `location` existed won't have it — same
+// fallback shape as the `bank`/`checkins` additions before it. Applied
+// everywhere onboarding data is loaded (local cache, remote fetch, import),
+// since a shallow `{ ...defaultData, ...saved }` merge replaces the whole
+// `onboarding` object rather than filling in just the missing key.
+function normalizeOnboarding(onboarding: OnboardingData): OnboardingData {
+  return { ...onboarding, location: onboarding.location ?? null }
+}
+
 function loadLocal(): AppData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return defaultData
-    return { ...defaultData, ...JSON.parse(raw) }
+    const parsed = { ...defaultData, ...JSON.parse(raw) }
+    return { ...parsed, onboarding: normalizeOnboarding(parsed.onboarding) }
   } catch {
     return defaultData
   }
@@ -36,20 +47,19 @@ function saveLocal(data: AppData) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
 
-// The Triova screen tracks "has this date already exploded into dust /
-// already birthed its star" as one-time flags in these localStorage sets,
-// so the animation only ever plays once per date. Today also tracks "has
-// the user already been asked about this missed date" the same way, so the
-// prompt doesn't nag on every load. Nothing else in the app knows about
-// them — so whenever days are wiped or cleared here, their flags have to be
-// wiped too, or a date can stay "dead"/"born"/"already asked about" forever
-// even after its wins are deleted and relogged.
-const DUST_KEY = 'triova-dusts'
+// The Triova screen tracks "has this date already birthed its star" as a
+// one-time flag in this localStorage set, so the birth animation only ever
+// plays once per date. Today also tracks "has the user already been asked
+// about this missed date" the same way, so the prompt doesn't nag on every
+// load. Nothing else in the app knows about them — so whenever days are
+// wiped or cleared here, their flags have to be wiped too, or a date can
+// stay "born"/"already asked about" forever even after its wins are
+// deleted and relogged.
 const BORN_KEY = 'triova-born'
 const MISSED_PROMPT_KEY = 'triova-missed-prompted'
 
 function clearDateFlags(predicate: (dateStr: string) => boolean) {
-  for (const storageKey of [DUST_KEY, BORN_KEY, MISSED_PROMPT_KEY]) {
+  for (const storageKey of [BORN_KEY, MISSED_PROMPT_KEY]) {
     try {
       const raw = localStorage.getItem(storageKey)
       if (!raw) continue
@@ -111,6 +121,7 @@ type AppContextValue = {
   clearDay: (date: string) => void
   clearRange: (startDate: string, endDate: string) => void
   updateSettings: (name: string, categories: AppData['onboarding']['categories']) => void
+  updateLocation: (location: Location) => void
   resetPractice: () => void
   restoreData: (imported: AppData) => void
   signOut: () => void
@@ -200,7 +211,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return
         }
         const merged: AppData = {
-          onboarding: row.onboarding,
+          onboarding: normalizeOnboarding(row.onboarding),
           days: row.days,
           bank: row.bank ?? defaultData.bank,
           checkins: row.checkins ?? defaultData.checkins,
@@ -355,21 +366,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     update({ ...dataRef.current, onboarding: { ...dataRef.current.onboarding, name, categories } })
   }, [update])
 
+  const updateLocation = useCallback((location: Location) => {
+    update({ ...dataRef.current, onboarding: { ...dataRef.current.onboarding, location } })
+  }, [update])
+
   const resetPractice = useCallback(() => {
-    localStorage.removeItem(DUST_KEY)
     localStorage.removeItem(BORN_KEY)
     localStorage.removeItem(MISSED_PROMPT_KEY)
     update({ ...dataRef.current, days: {}, checkins: {} })
   }, [update])
 
   const restoreData = useCallback((imported: AppData) => {
-    // Imported days may not match this device's dust/born/prompted flags at
+    // Imported days may not match this device's born/prompted flags at
     // all — drop them so Triova re-evaluates every date fresh against the
     // restored data.
-    localStorage.removeItem(DUST_KEY)
     localStorage.removeItem(BORN_KEY)
     localStorage.removeItem(MISSED_PROMPT_KEY)
-    update({ ...imported, bank: imported.bank ?? defaultData.bank, checkins: imported.checkins ?? defaultData.checkins })
+    update({
+      ...imported,
+      onboarding: normalizeOnboarding(imported.onboarding),
+      bank: imported.bank ?? defaultData.bank,
+      checkins: imported.checkins ?? defaultData.checkins,
+    })
   }, [update])
 
   // Records the answer to the weekly "which felt hardest?" check-in, keyed
@@ -400,7 +418,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setData(defaultData)
     saveLocal(defaultData)
     setSyncStatus('synced')
-    localStorage.removeItem(DUST_KEY)
     localStorage.removeItem(BORN_KEY)
     localStorage.removeItem(MISSED_PROMPT_KEY)
   }, [])
@@ -428,7 +445,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [signOut])
 
   return (
-    <AppContext.Provider value={{ data, session, authLoading, syncStatus, retrySync, completeOnboarding, logWin, clearWin, clearDay, clearRange, updateSettings, resetPractice, restoreData, signOut, deleteAccount, addToBank, removeFromBank, recordWeeklyCheckin }}>
+    <AppContext.Provider value={{ data, session, authLoading, syncStatus, retrySync, completeOnboarding, logWin, clearWin, clearDay, clearRange, updateSettings, updateLocation, resetPractice, restoreData, signOut, deleteAccount, addToBank, removeFromBank, recordWeeklyCheckin }}>
       {children}
     </AppContext.Provider>
   )

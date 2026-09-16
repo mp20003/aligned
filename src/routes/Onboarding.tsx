@@ -11,10 +11,11 @@
  * Props: none (reads/writes via useApp context, navigates via React Router).
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router'
 import { useApp } from '../context/AppContext'
-import type { CategoryKey } from '../types'
+import cities from '../data/cities.json'
+import type { CategoryKey, Location } from '../types'
 
 const SPIRITUAL_OPTIONS = ['Spiritual', 'Soulful', 'Intentional', 'Creative']
 
@@ -103,6 +104,13 @@ export default function Onboarding() {
 
   const [step, setStep] = useState(0)
   const [name, setName] = useState('')
+  const [location, setLocation] = useState<Location | null>(null)
+  const [citySearch, setCitySearch] = useState('')
+  const filteredCities = useMemo(() => {
+    const q = citySearch.trim().toLowerCase()
+    if (!q) return []
+    return cities.filter(c => c.name.toLowerCase().includes(q)).slice(0, 8)
+  }, [citySearch])
   const [drafts, setDrafts] = useState<Record<CategoryKey, CategoryDraft>>({
     physical:  { label: 'Physical',  customLabel: '', definition: '' },
     mental:    { label: 'Mental',    customLabel: '', definition: '' },
@@ -147,6 +155,7 @@ export default function Onboarding() {
         mental:    { label: drafts.mental.customLabel    || drafts.mental.label,    definition: drafts.mental.definition    },
         spiritual: { label: drafts.spiritual.customLabel || drafts.spiritual.label, definition: drafts.spiritual.definition },
       },
+      location,
     })
   }
 
@@ -218,13 +227,73 @@ export default function Onboarding() {
     )
   }
 
+  // ── Location ──
+  // Only needs to get hemisphere/latitude band right (used to compute the
+  // real night sky on the Triova screen), not street precision — a city
+  // picker rather than a device-geolocation permission prompt, both more
+  // private and simpler.
+  if (step === 1) {
+    return (
+      <Screen>
+        <div className="flex flex-col min-h-screen px-6 pt-14 pb-12 gap-6">
+          <div className="flex flex-col gap-1.5">
+            <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">One more thing</p>
+            <h2 className="font-serif text-3xl text-charcoal">Where in the world are you?</h2>
+            <p className="font-sans text-sm text-charcoal/55 leading-relaxed">
+              Triova shows you the real night sky above you as you build your practice. Just enough to get your rough location right.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <input
+              type="text"
+              value={citySearch}
+              onChange={e => { setCitySearch(e.target.value); setLocation(null) }}
+              placeholder="Search for your city…"
+              className="w-full bg-transparent border-b border-charcoal/20 py-2 font-serif text-lg text-charcoal placeholder:text-charcoal/30 focus:outline-none focus:border-charcoal/50"
+            />
+            {location && (
+              <p className="font-sans text-xs text-charcoal/50">Selected: {location.name}</p>
+            )}
+          </div>
+
+          {filteredCities.length > 0 && (
+            <div className="flex flex-col gap-1">
+              {filteredCities.map(c => (
+                <button
+                  key={c.name}
+                  onClick={() => { setLocation(c); setCitySearch(c.name) }}
+                  className={`text-left px-4 py-2.5 rounded-xl font-sans text-sm transition-colors ${
+                    location?.name === c.name ? 'bg-charcoal text-beige' : 'bg-white/40 text-charcoal/70'
+                  }`}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={() => setStep(2)}
+            disabled={!location}
+            className={`w-full py-4 rounded-2xl font-sans text-sm tracking-wide transition-all duration-200 mt-auto ${
+              location ? 'bg-charcoal text-beige' : 'bg-charcoal/10 text-charcoal/30 cursor-not-allowed'
+            }`}
+          >
+            Next
+          </button>
+        </div>
+      </Screen>
+    )
+  }
+
   // ── Category steps ──
-  if (step >= 1 && step <= 3) {
-    const categoryKey = STEPS[step - 1]
+  if (step >= 2 && step <= 4) {
+    const categoryKey = STEPS[step - 2]
     const meta = STEP_META[categoryKey]
     const draft = drafts[categoryKey]
     const isSpiritual = categoryKey === 'spiritual'
-    const isLast = step === 3
+    const isLast = step === 4
     const accentText = ACCENT_TEXT[meta.colour]
     const accentBg = ACCENT_BG[meta.colour]
     const accentBorder = ACCENT_BORDER[meta.colour]
@@ -239,9 +308,9 @@ export default function Onboarding() {
               <div
                 key={i}
                 className={`h-1.5 rounded-full transition-all duration-300 ${
-                  i < step - 1
+                  i < step - 2
                     ? `${accentBg} w-4`
-                    : i === step - 1
+                    : i === step - 2
                     ? `${accentBg} w-6`
                     : 'bg-charcoal/15 w-1.5'
                 }`}
@@ -252,7 +321,7 @@ export default function Onboarding() {
           {/* Header */}
           <div className="flex flex-col gap-1.5">
             <p className="font-sans text-xs uppercase tracking-widest text-charcoal/40">
-              Category {step} of 3
+              Category {step - 1} of 3
             </p>
             <h2 className={`font-serif text-3xl ${accentText}`}>
               {isSpiritual ? (draft.customLabel || draft.label) : meta.defaultLabel}

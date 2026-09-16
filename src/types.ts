@@ -17,10 +17,20 @@ export type CategoryConfig = {
   definition: string
 }
 
+// Rough location, for computing the real night sky on the Triova screen —
+// only needs to get hemisphere/latitude band right, not street precision, so
+// this comes from a city picker rather than device geolocation.
+export type Location = {
+  name: string
+  lat: number
+  lon: number
+}
+
 export type OnboardingData = {
   completed: boolean
   name: string
   categories: Record<CategoryKey, CategoryConfig>
+  location: Location | null
 }
 
 export type WinBank = Record<CategoryKey, string[]>
